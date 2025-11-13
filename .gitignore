@@ -1,0 +1,54 @@
+# ===== Java =====
+# 编译生成的 class 文件
+*.class
+
+# 日志文件
+*.log
+
+# 打包生成的 JAR / WAR / EAR
+*.jar
+*.war
+*.ear
+
+# IDE 生成的临时文件
+*.iml
+.idea/
+*.iws
+*.ipr
+
+# ===== IntelliJ IDEA =====
+# 项目配置文件可选忽略，但通常忽略 .idea/ 下大量文件
+/.idea/*
+/out/
+
+# ===== Eclipse =====
+.project
+.classpath
+.settings/
+bin/
+
+# ===== VS Code =====
+.vscode/
+
+# ===== Maven =====
+target/
+
+# ===== Gradle =====
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+!gradle/wrapper/gradle-wrapper.properties
+
+# ===== OS 相关文件 =====
+# macOS
+.DS_Store
+# Windows
+Thumbs.db
+
+# ===== 环境变量、密钥文件 =====
+*.env
+*.key
+*.pem
+
+# ===== 算法仓库 =====
+*.exe

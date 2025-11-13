@@ -1,0 +1,375 @@
+<!doctype html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="utf-8" />
+    <title>基数排序（Radix Sort）SVG 动画 — 分配与收集可视化</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
+            background: #f6f8fb;
+            color: #111;
+            padding: 18px
+        }
+
+        h1 {
+            font-size: 20px;
+            margin: 0 0 8px
+        }
+
+        #controls {
+            margin: 10px 0 18px
+        }
+
+        button {
+            margin-right: 6px;
+            padding: 6px 10px;
+            border-radius: 6px;
+            border: 1px solid #ccc;
+            background: #fff;
+            cursor: pointer
+        }
+
+        button:active {
+            transform: translateY(1px)
+        }
+
+        label {
+            margin-right: 8px
+        }
+
+        #status {
+            margin-top: 8px;
+            font-size: 14px
+        }
+
+        svg {
+            background: #fff;
+            border: 1px solid #e0e6ef;
+            border-radius: 6px
+        }
+
+        .bucket-label {
+            font-size: 12px;
+            fill: #333
+        }
+
+        .slot-rect {
+            fill: #e8f0ff;
+            stroke: #c6daff;
+            rx: 6
+        }
+
+        .item-rect {
+            fill: #ffeecf;
+            stroke: #f0c66a;
+            rx: 6
+        }
+
+        .item-text {
+            font-size: 13px;
+            fill: #111;
+            pointer-events: none
+        }
+
+        .bucket-box {
+            fill: none;
+            stroke: #d7dbe6;
+            stroke-width: 1
+        }
+
+        .ghost {
+            opacity: 0.15
+        }
+    </style>
+</head>
+
+<body>
+    <h1>基数排序（LSD）动画 — 可视化“分配（Distribute）”与“收集（Collect）”</h1>
+    <div id="controls">
+        <button id="play">播放</button>
+        <button id="next">下一步</button>
+        <button id="reset">重置</button>
+        <label>速度 <input id="speed" type="range" min="0.2" max="2.5" step="0.1" value="1"> <span
+                id="speedVal">1.0×</span></label>
+        <label>样例数组 <select id="preset">
+                <option value="170,45,75,90,802,24,2,66">170,45,75,90,802,24,2,66</option>
+                <option value="5,3,9,1,0,12,34,7">5,3,9,1,0,12,34,7</option>
+                <option value="29,10,14,37,13,2,78,100">29,10,14,37,13,2,78,100</option>
+            </select></label>
+        <button id="applyPreset">应用</button>
+    </div>
+    <div id="status">状态：<span id="statusText">就绪（等待播放）</span></div>
+
+    <svg id="stage" width="980" height="420" viewBox="0 0 980 420">
+        <!-- 预置区域 -->
+        <g id="arrayArea" transform="translate(20,20)"></g>
+
+        <!-- buckets area -->
+        <g id="bucketsArea" transform="translate(20,180)"></g>
+
+        <!-- legend -->
+        <g transform="translate(740,20)">
+            <rect x="0" y="0" width="220" height="120" rx="8" fill="#fff" stroke="#e6e9f2" />
+            <text x="12" y="20" font-size="13" fill="#333">说明：</text>
+            <text x="12" y="44" font-size="12" fill="#555">黄色方块：数组元素（含完整数值）</text>
+            <text x="12" y="64" font-size="12" fill="#555">分配：元素按当前位被移动到对应桶内（从下至上堆叠）</text>
+            <text x="12" y="84" font-size="12" fill="#555">收集：按桶编号从 0→9 顺序收回到数组（保持桶内入桶顺序）</text>
+        </g>
+    </svg>
+
+    <script>
+        // ======= 配置 =======
+        const SVG = document.getElementById('stage');
+        const arrayArea = document.getElementById('arrayArea');
+        const bucketsArea = document.getElementById('bucketsArea');
+        const statusText = document.getElementById('statusText');
+        let speed = Number(document.getElementById('speed').value);
+
+        // 视觉常量
+        const slotW = 80, slotH = 36, slotGap = 16; // array slot
+        const startX = 10, startY = 0;
+        const bucketX0 = 10, bucketY0 = 0, bucketGapX = 92;
+        const bucketWidth = 72, bucketHeight = 120, bucketStackGap = 30;
+
+        // 动画辅助：线性插值动画（requestAnimationFrame）
+        function animateMove(elem, from, to, duration, cb) {
+            const start = performance.now();
+            function step(t) {
+                const p = Math.min(1, (t - start) / duration);
+                const x = from.x + (to.x - from.x) * p;
+                const y = from.y + (to.y - from.y) * p;
+                elem.setAttribute('transform', `translate(${x},${y})`);
+                if (p < 1) requestAnimationFrame(step);
+                else if (cb) setTimeout(cb, 180);
+            }
+            requestAnimationFrame(step);
+        }
+
+        // ======= 数据与 DOM 构建 =======
+        let items = []; // {value, node, index}
+        let buckets = []; // array of arrays storing item indices (in visual order)
+        let baseArray = [];
+        let playing = false;
+        let currentPass = 0;
+        let keynum = 1;
+        let playTimer = null;
+
+        function buildSceneFromArray(arr) {
+            // reset
+            items = [];
+            buckets = Array.from({ length: 10 }, () => []);
+            baseArray = arr.slice();
+            currentPass = 0;
+            arrayArea.innerHTML = '';
+            bucketsArea.innerHTML = '';
+
+            // determine digits
+            const maxv = Math.max(...arr.map(x => Math.abs(x)));
+            keynum = Math.max(1, Math.ceil(Math.log10(maxv + 1e-12)));
+
+            // draw array slots and items
+            for (let i = 0; i < arr.length; i++) {
+                const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+                const x = startX + i * (slotW + slotGap);
+                const y = startY;
+                g.setAttribute('transform', `translate(${x},${y})`);
+
+                const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                rect.setAttribute('width', slotW);
+                rect.setAttribute('height', slotH);
+                rect.setAttribute('class', 'slot-rect');
+                rect.setAttribute('rx', '6');
+                g.appendChild(rect);
+
+                const txt = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                txt.setAttribute('x', slotW / 2);
+                txt.setAttribute('y', slotH / 2 + 5);
+                txt.setAttribute('text-anchor', 'middle');
+                txt.setAttribute('class', 'item-text');
+                txt.textContent = String(arr[i]);
+                g.appendChild(txt);
+
+                arrayArea.appendChild(g);
+                items.push({ value: arr[i], node: g, index: i });
+            }
+
+            // draw buckets 0..9
+            for (let b = 0; b < 10; b++) {
+                const gx = bucketX0 + b * bucketGapX;
+                const gg = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+                gg.setAttribute('transform', `translate(${gx},${bucketY0})`);
+
+                const box = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                box.setAttribute('width', bucketWidth);
+                box.setAttribute('height', bucketHeight);
+                box.setAttribute('class', 'bucket-box');
+                box.setAttribute('x', 0);
+                box.setAttribute('y', 0);
+                box.setAttribute('rx', 6);
+                gg.appendChild(box);
+
+                const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                label.setAttribute('x', bucketWidth / 2);
+                label.setAttribute('y', bucketHeight + 16);
+                label.setAttribute('text-anchor', 'middle');
+                label.setAttribute('class', 'bucket-label');
+                label.textContent = String(b);
+                gg.appendChild(label);
+
+                bucketsArea.appendChild(gg);
+            }
+        }
+
+        // get digit at position d (0=units) for non-negative int
+        function digitAt(val, d) {
+            return Math.floor(Math.abs(val) / Math.pow(10, d)) % 10;
+        }
+
+        // run one pass: distribute then collect, with animations
+        function runPass(passIndex, callback) {
+            statusText.textContent = `第 ${passIndex + 1} 趟：分配（按第 ${passIndex} 位）`;
+            // DISTRIBUTE
+            // for each item in current array order, animate into its bucket bottom-up
+            const order = items.slice(); // current visual order
+
+            // compute current positions for each item
+            const fromPositions = order.map((it, i) => {
+                const x = startX + it.index * (slotW + slotGap);
+                const y = startY;
+                return { x, y };
+            });
+
+            // for each item sequentially animate moving to bucket
+            let i = 0;
+            function stepDistribute() {
+                if (i >= order.length) {
+                    // after distribution complete, wait a moment then collect
+                    setTimeout(() => collectPhase(callback), 600 / speed);
+                    return;
+                }
+                const it = order[i];
+                const d = digitAt(it.value, passIndex);
+                const stackIndex = buckets[d].length;
+                buckets[d].push(it);
+
+                const targetX = bucketX0 + d * bucketGapX + 4; // small padding
+                const targetY = bucketY0 + bucketHeight - slotH - stackIndex * bucketStackGap; // stack from bottom up
+
+                animateMove(it.node, fromPositions[i], { x: targetX, y: targetY }, 480 / speed, () => {
+                    // record item's new index as -1 (in bucket)
+                    it.index = -1;
+                    i++; setTimeout(stepDistribute, 80 / speed);
+                });
+            }
+            stepDistribute();
+        }
+
+        function collectPhase(callback) {
+            statusText.textContent = `收集：按桶编号从 0 → 9 顺序收回`;
+            // collect into new array order
+            const collected = [];
+            for (let b = 0; b < 10; b++) {
+                // bucket preserves arrival order (buckets[b] is array in arrival order)
+                for (let k = 0; k < buckets[b].length; k++) collected.push(buckets[b][k]);
+            }
+
+            // animate moving collected items back to array slots 0..n-1 in order
+            const n = collected.length;
+            let idx = 0;
+            function stepCollect() {
+                if (idx >= n) {
+                    // finish this pass: rebuild items array in new order
+                    for (let p = 0; p < collected.length; p++) {
+                        collected[p].index = p; // new index
+                        // also update text position in arrayArea
+                        const x = startX + p * (slotW + slotGap);
+                        const y = startY;
+                        // ensure transform set exactly
+                        collected[p].node.setAttribute('transform', `translate(${x},${y})`);
+                        // update displayed text to show value
+                    }
+                    // clear buckets
+                    buckets = Array.from({ length: 10 }, () => []);
+                    // reorder global items array
+                    items = collected.slice();
+                    if (callback) setTimeout(callback, 360 / speed);
+                    return;
+                }
+                const it = collected[idx];
+                const targetX = startX + idx * (slotW + slotGap);
+                const targetY = startY;
+                // animate from current (bucket) pos to target
+                // compute current transform: parse transform translate(x,y)
+                const curTrans = it.node.getAttribute('transform') || 'translate(0,0)';
+                const m = /translate\(([-0-9.]+),\s*([-0-9.]+)\)/.exec(curTrans);
+                const from = m ? { x: parseFloat(m[1]), y: parseFloat(m[2]) } : { x: 0, y: 0 };
+                animateMove(it.node, from, { x: targetX, y: targetY }, 480 / speed, () => { idx++; setTimeout(stepCollect, 80 / speed); });
+            }
+            stepCollect();
+        }
+
+        // Run full animation (all passes sequentially)
+        function playAll() {
+            if (playing) return;
+            playing = true;
+            statusText.textContent = '播放中...';
+            const passes = keynum;
+            let p = 0;
+            function nextPass() {
+                if (!playing) { statusText.textContent = '已暂停'; return; }
+                if (p >= passes) { statusText.textContent = '完成：所有趟已执行'; playing = false; return; }
+                runPass(p, () => { p++; setTimeout(nextPass, 260 / speed); });
+            }
+            nextPass();
+        }
+
+        function stepOne() {
+            if (playing) { playing = false; statusText.textContent = '已暂停'; return; }
+            // run a single pass (if any remain)
+            if (currentPass >= keynum) { statusText.textContent = '所有趟已执行'; return; }
+            // reset buckets for this pass
+            buckets = Array.from({ length: 10 }, () => []);
+            runPass(currentPass, () => { currentPass++; statusText.textContent = `完成第 ${currentPass} 趟`; });
+        }
+
+        function resetScene(arr) {
+            playing = false; currentPass = 0; buckets = Array.from({ length: 10 }, () => []);
+            buildSceneFromArray(arr);
+            statusText.textContent = '就绪（等待播放）';
+        }
+
+        // UI hookup
+        document.getElementById('play').addEventListener('click', () => {
+            if (playing) { playing = false; statusText.textContent = '已暂停'; document.getElementById('play').textContent = '播放'; }
+            else { document.getElementById('play').textContent = '暂停'; playAll(); }
+        });
+
+        document.getElementById('next').addEventListener('click', () => { stepOne(); });
+
+        document.getElementById('reset').addEventListener('click', () => {
+            const s = document.getElementById('preset').value;
+            const arr = s.split(',').map(x => Number(x.trim()));
+            resetScene(arr);
+        });
+
+        const speedEl = document.getElementById('speed');
+        speedEl.addEventListener('input', () => { speed = Number(speedEl.value); document.getElementById('speedVal').textContent = speed.toFixed(1) + "×"; });
+
+        document.getElementById('applyPreset').addEventListener('click', () => {
+            const s = document.getElementById('preset').value;
+            const arr = s.split(',').map(x => Number(x.trim()));
+            resetScene(arr);
+        });
+
+        // initial load
+        (function () {
+            const s = document.getElementById('preset').value;
+            const arr = s.split(',').map(x => Number(x.trim()));
+            buildSceneFromArray(arr);
+        })();
+
+    </script>
+</body>
+
+</html>

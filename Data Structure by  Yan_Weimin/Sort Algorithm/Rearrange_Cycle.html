@@ -1,0 +1,397 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Rearrange — in-place permutation visualization</title>
+    <style>
+        body {
+            font-family: system-ui, Segoe UI, Roboto, Helvetica, Arial;
+            margin: 18px;
+            background: #faf9ff;
+            color: #111
+        }
+
+        h1 {
+            font-size: 18px;
+            margin: 0 0 8px
+        }
+
+        .panel {
+            display: flex;
+            gap: 18px
+        }
+
+        .controls {
+            width: 360px
+        }
+
+        textarea {
+            width: 100%;
+            height: 80px;
+            font-family: monospace;
+            padding: 8px
+        }
+
+        button {
+            padding: 8px 10px;
+            margin: 6px 6px 6px 0;
+            border-radius: 6px;
+            border: 1px solid #ccc;
+            background: white;
+            cursor: pointer
+        }
+
+        #svgwrap {
+            flex: 1;
+            min-width: 300px
+        }
+
+        svg {
+            width: 100%;
+            height: 260px;
+            background: white;
+            border-radius: 8px;
+            border: 1px solid #e2e8f0
+        }
+
+        .box {
+            fill: url(#rainbowGrad);
+            stroke: #333;
+            stroke-width: 1
+        }
+
+        .idx {
+            font-size: 12px;
+            fill: #666
+        }
+
+        .val {
+            font-size: 16px;
+            font-weight: 600
+        }
+
+        .highlight {
+            stroke: #ef7a3d;
+            stroke-width: 3
+        }
+
+        .muted {
+            fill: #ddd
+        }
+
+        .log {
+            height: 120px;
+            overflow: auto;
+            background: #fff;
+            padding: 8px;
+            border-radius: 6px;
+            border: 1px solid #e6eef8;
+            font-family: monospace
+        }
+
+        .small {
+            font-size: 13px;
+            color: #444
+        }
+
+        .footer {
+            margin-top: 12px;
+            color: #666;
+            font-size: 13px
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Rearrange(SLList*, int adr[]) — step-by-step SVG animation</h1>
+    <div class="panel">
+        <div class="controls">
+            <p class="small">Edit the array (values) and the adr[] permutation mapping. Use 1-based indexing; number of
+                items is inferred from the values list.</p>
+            <label>Values (space/comma separated, index 1..n):</label>
+            <textarea id="vals">A B C D E</textarea>
+            <label>adr[] mapping (space/comma separated, one-based, length = n). adr[i] gives the index whose item
+                should go to position i after rearrangement.</label>
+            <textarea id="adr">2 5 3 1 4</textarea>
+            <div style="margin-top:8px">
+                <button id="build">Build & Prepare</button>
+                <button id="play">Play</button>
+                <button id="pause">Pause</button>
+                <button id="step">Step</button>
+                <button id="back">Back</button>
+                <button id="reset">Reset</button>
+            </div>
+            <div style="margin-top:8px">
+                <small class="small">Animation speed (ms per move):</small>
+                <input id="speed" type="range" min="200" max="2000" value="700" style="width:100%" />
+            </div>
+            <div style="margin-top:10px">
+                <div class="small">Operation log:</div>
+                <div id="log" class="log"></div>
+            </div>
+        </div>
+        <div id="svgwrap">
+            <svg id="svg" viewBox="0 0 1000 260" preserveAspectRatio="xMidYMid meet">
+                <!-- boxes drawn dynamically -->
+            </svg>
+        </div>
+    </div>
+    <div class="footer">This visualizer simulates the exact in-place algorithm from your C function: for each i from
+        1..n, if adr[i] != i it follows the cycle starting at i, rotating elements and marking adr[j]=j as it fixes
+        positions. Use the controls to step through moves.</div>
+
+    <script>
+        // Utility parse text fields
+        function parseList(s) { return s.trim().split(/[\s,]+/).filter(x => x.length > 0); }
+
+        let state = {
+            vals: [], // 1-based: index 1..n
+            adr: [],  // 1-based
+            n: 0,
+            ops: [], // recorded operations: {type:'move', from:k, to:j, temp:false} or {type:'placeTemp', to:j}
+            frames: [],
+            pointer: 0,
+            playing: false,
+            animating: false
+        };
+
+        const svg = document.getElementById('svg');
+        const logEl = document.getElementById('log');
+        const speedInput = document.getElementById('speed');
+
+        function buildFromInputs() {
+            const v = parseList(document.getElementById('vals').value);
+            const a = parseList(document.getElementById('adr').value);
+            if (a.length !== v.length) alert('adr[] length must equal values length');
+            state.n = v.length;
+            state.vals = ['_dummy'].concat(v.slice());
+            // parse adr as ints
+            state.adr = ['_d'].concat(a.map(x => parseInt(x, 10)));
+            // basic validation
+            for (let i = 1; i <= state.n; i++) {
+                const ai = state.adr[i];
+                if (!(ai >= 1 && ai <= state.n)) {
+                    alert('adr[' + i + '] must be in 1..n');
+                    return;
+                }
+            }
+            state.ops = simulateOps(state.vals.slice(), state.adr.slice());
+            state.frames = [];
+            state.pointer = 0;
+            state.playing = false;
+            state.animating = false;
+            logEl.textContent = '';
+            renderStatic();
+            appendLog('Prepared: n=' + state.n + ' — ' + state.ops.length + ' primitive moves recorded. Click Play or Step.');
+        }
+
+        function simulateOps(vals, adr) {
+            // Record operations that the C function performs, using copies
+            const ops = [];
+            const n = vals.length - 1;
+            for (let i = 1; i <= n; i++) {
+                if (adr[i] !== i) {
+                    let j = i;
+                    const temp = vals[i];
+                    // we will emulate: r[0]=r[i]; while adr[j]!=i { k=adr[j]; r[j]=r[k]; adr[j]=j; j=k } r[j]=r[0]; adr[j]=j
+                    ops.push({ type: 'takeTemp', from: i, val: temp });
+                    while (adr[j] !== i) {
+                        const k = adr[j];
+                        ops.push({ type: 'move', from: k, to: j });
+                        // emulate assignment
+                        vals[j] = vals[k];
+                        adr[j] = j;
+                        j = k;
+                    }
+                    ops.push({ type: 'placeTemp', to: j });
+                    adr[j] = j;
+                    vals[j] = temp;
+                }
+            }
+            return ops;
+        }
+
+        function renderStatic() {
+            // draw boxes
+            while (svg.firstChild) svg.removeChild(svg.firstChild);
+            const n = state.n || 0;
+            const left = 40;
+            const top = 40;
+            const boxW = Math.max(60, Math.min(120, (900 - left * 2) / Math.max(1, n)));
+            const gap = 12;
+            for (let i = 1; i <= n; i++) {
+                const x = left + (i - 1) * (boxW + gap);
+                const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+                g.setAttribute('data-i', i);
+                const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                rect.setAttribute('x', x); rect.setAttribute('y', top);
+                rect.setAttribute('width', boxW); rect.setAttribute('height', 80);
+                rect.setAttribute('rx', 8); rect.setAttribute('class', 'box');
+                rect.setAttribute('id', 'box' + i);
+                const idx = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                idx.setAttribute('x', x + 6); idx.setAttribute('y', top - 6); idx.setAttribute('class', 'idx');
+                idx.textContent = 'i=' + i;
+
+                const val = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                val.setAttribute('x', x + boxW / 2); val.setAttribute('y', top + 48); val.setAttribute('text-anchor', 'middle'); val.setAttribute('class', 'val');
+                val.setAttribute('id', 'val' + i);
+                val.textContent = state.vals[i] || '';
+
+                const adrText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                adrText.setAttribute('x', x + boxW - 6); adrText.setAttribute('y', top - 6); adrText.setAttribute('text-anchor', 'end'); adrText.setAttribute('class', 'idx');
+                adrText.setAttribute('id', 'adr' + i);
+                adrText.textContent = 'adr[' + i + ']=' + (state.adr[i] || '-');
+
+                g.appendChild(rect); g.appendChild(idx); g.appendChild(val); g.appendChild(adrText);
+                svg.appendChild(g);
+            }
+        }
+
+        function appendLog(s) { logEl.textContent = logEl.textContent + s + '\n'; logEl.scrollTop = logEl.scrollHeight; }
+
+        async function play() {
+            if (state.pointer >= state.ops.length) { appendLog('Finished.'); return; }
+            state.playing = true;
+            while (state.playing && state.pointer < state.ops.length) {
+                await doOp(state.ops[state.pointer]);
+                state.pointer++;
+                await sleep(parseInt(speedInput.value));
+            }
+            state.playing = false;
+        }
+
+        function pause() { state.playing = false; }
+
+        function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+        async function doOp(op) {
+            if (op.type === 'takeTemp') {
+                // highlight source; show temporary floating value
+                highlight(op.from, '#ef7a3d');
+                showFloating(op.from, state.vals[op.from]);
+                appendLog('Take temp = r[' + op.from + '] ("' + state.vals[op.from] + '")');
+            } else if (op.type === 'move') {
+                highlight(op.to, '#ef7a3d');
+                highlight(op.from, '#4a90e2');
+                appendLog('r[' + op.to + '] = r[' + op.from + '] ("' + getVal(op.from) + '")');
+                await animateMove(op.from, op.to);
+                // assign value
+                setValue(op.to, getVal(op.from));
+                // mark adr[to] = to (visual)
+                setAdr(op.to, op.to);
+            } else if (op.type === 'placeTemp') {
+                appendLog('Place temp into r[' + op.to + ']');
+                await animatePlaceTemp(op.to);
+                setValue(op.to, state.vals[op.to]);
+                setAdr(op.to, op.to);
+            }
+            clearHighlights();
+        }
+
+        function getVal(i) { return state.vals[i]; }
+        function setValue(i, v) {
+            state.vals[i] = v;
+            const t = document.getElementById('val' + i); if (t) t.textContent = v;
+        }
+        function setAdr(i, v) { state.adr[i] = v; const t = document.getElementById('adr' + i); if (t) t.textContent = 'adr[' + i + ']=' + v; }
+
+        function highlight(i, color) { const r = document.getElementById('box' + i); if (r) r.classList.add('highlight'); }
+        function clearHighlights() { const all = svg.querySelectorAll('.highlight'); all.forEach(el => el.classList.remove('highlight')); removeFloating(); }
+
+        // Floating moving value element
+        let floating = null;
+        function showFloating(fromIndex, text) {
+            removeFloating();
+            const fromRect = document.getElementById('box' + fromIndex);
+            if (!fromRect) return;
+            const bbox = fromRect.getBBox();
+            floating = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+            const circ = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+            circ.setAttribute('x', bbox.x + bbox.width / 2 - 30);
+            circ.setAttribute('y', bbox.y + bbox.height + 10);
+            circ.setAttribute('width', 60); circ.setAttribute('height', 28); circ.setAttribute('rx', 6); circ.setAttribute('class', 'box');
+            const txt = document.createElementNS('http://www.w3.org/2000/svg', 'text'); txt.setAttribute('x', bbox.x + bbox.width / 2); txt.setAttribute('y', bbox.y + bbox.height + 30); txt.setAttribute('text-anchor', 'middle'); txt.setAttribute('class', 'val'); txt.textContent = text;
+            floating.appendChild(circ); floating.appendChild(txt);
+            floating.setAttribute('id', 'floating');
+            svg.appendChild(floating);
+        }
+        function removeFloating() { const f = document.getElementById('floating'); if (f) f.remove(); floating = null; }
+
+        function animateMove(from, to) {
+            return new Promise(resolve => {
+                const fromEl = document.getElementById('box' + from);
+                const toEl = document.getElementById('box' + to);
+                if (!fromEl || !toEl) { resolve(); return; }
+                const fv = document.getElementById('val' + from).textContent;
+                // create a copy text that will move
+                const start = fromEl.getBBox(); const end = toEl.getBBox();
+                const mover = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                mover.setAttribute('class', 'val'); mover.setAttribute('text-anchor', 'middle'); mover.textContent = fv;
+                svg.appendChild(mover);
+                const duration = Math.max(200, parseInt(speedInput.value) / 1.5);
+                const startX = start.x + start.width / 2; const startY = start.y + 48;
+                const endX = end.x + end.width / 2; const endY = end.y + 48;
+                const startTime = performance.now();
+                function step(t) {
+                    const p = Math.min(1, (t - startTime) / duration);
+                    const curX = startX + (endX - startX) * p;
+                    const curY = startY + (endY - startY) * p - Math.sin(p * Math.PI) * 40; // arc
+                    mover.setAttribute('x', curX); mover.setAttribute('y', curY);
+                    if (p < 1) requestAnimationFrame(step); else { mover.remove(); resolve(); }
+                }
+                requestAnimationFrame(step);
+            });
+        }
+
+        function animatePlaceTemp(to) {
+            return new Promise(resolve => {
+                const toEl = document.getElementById('box' + to);
+                if (!toEl) { resolve(); return; }
+                const bbox = toEl.getBBox();
+                // floating already exists: animate it into place
+                const f = document.getElementById('floating');
+                if (!f) { resolve(); return; }
+                const rect = f.querySelector('rect'); const txt = f.querySelector('text');
+                const startBox = rect.getBBox(); const startX = startBox.x + startBox.width / 2; const startY = startBox.y + 18;
+                const endX = bbox.x + bbox.width / 2; const endY = bbox.y + 48;
+                const duration = Math.max(200, parseInt(speedInput.value) / 1.5);
+                const startTime = performance.now();
+                function step(t) {
+                    const p = Math.min(1, (t - startTime) / duration);
+                    const curX = startX + (endX - startX) * p;
+                    const curY = startY + (endY - startY) * p;
+                    txt.setAttribute('x', curX); txt.setAttribute('y', curY);
+                    rect.setAttribute('x', curX - 30); rect.setAttribute('y', curY - 18);
+                    if (p < 1) requestAnimationFrame(step); else { removeFloating(); resolve(); }
+                }
+                requestAnimationFrame(step);
+            });
+        }
+
+        // Controls wiring
+        document.getElementById('build').addEventListener('click', buildFromInputs);
+        document.getElementById('play').addEventListener('click', () => { if (state.ops.length === 0) buildFromInputs(); play(); });
+        document.getElementById('pause').addEventListener('click', pause);
+        document.getElementById('step').addEventListener('click', async () => { if (state.ops.length === 0) buildFromInputs(); if (state.pointer < state.ops.length) { await doOp(state.ops[state.pointer]); state.pointer++; } else appendLog('Already at end.'); });
+
+        document.getElementById('back').addEventListener('click', () => {
+            // simple reset and replay to pointer-1
+            if (state.ops.length === 0) { buildFromInputs(); return; }
+            const target = Math.max(0, state.pointer - 1);
+            // rebuild state and replay target ops
+            const origVals = ['_dummy'].concat(parseList(document.getElementById('vals').value));
+            const origAdr = ['_d'].concat(parseList(document.getElementById('adr').value).map(x => parseInt(x, 10)));
+            state.vals = origVals.slice(); state.adr = origAdr.slice(); renderStatic(); state.pointer = 0; logEl.textContent = '';
+            (async () => { for (let i = 0; i < target; i++) { await doOp(state.ops[i]); state.pointer++; } })();
+        });
+
+        document.getElementById('reset').addEventListener('click', () => { buildFromInputs(); });
+
+        // initial build
+        buildFromInputs();
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,554 @@
+<!doctype html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>归并排序可视化（数字移动动画）</title>
+    <style>
+        :root {
+            --bg: #f8fafc;
+            --card: #ffffff;
+            --muted: #475569;
+            --accent: #2563eb;
+            --accent2: #10b981;
+            --bar: #3b82f6;
+            --tmp: #f59e0b
+        }
+
+        * {
+            box-sizing: border-box;
+            font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial
+        }
+
+        body {
+            margin: 0;
+            background: var(--bg);
+            color: #0f1724
+        }
+
+        header {
+            padding: 14px 20px;
+            border-bottom: 1px solid rgba(15, 23, 36, 0.06);
+            display: flex;
+            align-items: center;
+            gap: 12px
+        }
+
+        h1 {
+            font-size: 18px;
+            margin: 0;
+            color: var(--accent)
+        }
+
+        .controls {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            margin-left: auto
+        }
+
+        .controls>* {
+            background: var(--card);
+            border: 1px solid rgba(15, 23, 36, 0.06);
+            padding: 8px;
+            border-radius: 8px;
+            color: inherit
+        }
+
+        .btn {
+            cursor: pointer
+        }
+
+        main {
+            display: grid;
+            grid-template-columns: 1fr 420px;
+            gap: 16px;
+            padding: 18px
+        }
+
+        /* 左侧：可视化 + 代码 */
+        .visual {
+            background: var(--card);
+            padding: 12px;
+            border-radius: 12px;
+            border: 1px solid rgba(15, 23, 36, 0.04);
+            display: flex;
+            flex-direction: column;
+            gap: 12px
+        }
+
+        .array-wrap {
+            position: relative
+        }
+
+        .tmp-area {
+            height: 72px;
+            border-radius: 8px;
+            background: linear-gradient(180deg, rgba(245, 158, 11, 0.06), transparent);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px;
+            margin-bottom: 6px
+        }
+
+        .tmp-slot {
+            flex: 1;
+            min-width: 28px;
+            height: 48px;
+            border-radius: 6px;
+            border: 1px dashed rgba(15, 23, 36, 0.06);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            color: var(--muted);
+            background: #fff
+        }
+
+        .array-area {
+            height: 300px;
+            display: flex;
+            align-items: flex-end;
+            gap: 6px;
+            padding: 12px;
+            border-radius: 8px;
+            background: linear-gradient(180deg, rgba(99, 102, 241, 0.03), transparent);
+            position: relative;
+        }
+
+        .bar {
+            flex: 1 1 auto;
+            display: flex;
+            align-items: flex-end;
+            justify-content: center;
+            border-radius: 6px 6px 0 0;
+            position: relative;
+            transition: height 180ms ease;
+            background: linear-gradient(180deg, var(--bar), #60a5fa);
+        }
+
+        .bar>.label {
+            position: absolute;
+            bottom: -20px;
+            font-size: 12px;
+            color: var(--muted)
+        }
+
+        .floating {
+            position: absolute;
+            z-index: 999;
+            padding: 6px 8px;
+            border-radius: 6px;
+            background: var(--tmp);
+            color: white;
+            font-weight: 700;
+            box-shadow: 0 6px 18px rgba(2, 6, 23, 0.12);
+            transform-origin: center;
+            transition: transform 300ms ease, left 300ms ease, top 300ms ease, opacity 200ms ease
+        }
+
+        .status {
+            display: flex;
+            gap: 12px;
+            align-items: center
+        }
+
+        .chip {
+            background: rgba(2, 6, 23, 0.03);
+            padding: 6px 10px;
+            border-radius: 999px;
+            font-size: 13px;
+            color: var(--muted)
+        }
+
+        .code-panel {
+            display: flex;
+            gap: 12px
+        }
+
+        pre.code {
+            flex: 1;
+            background: #0f1724;
+            color: #e6eef8;
+            padding: 12px;
+            border-radius: 8px;
+            overflow: auto;
+            max-height: 320px;
+            width: 50%
+        }
+
+        pre.code code {
+            display: block;
+            white-space: pre
+        }
+
+        .code-line {
+            display: block;
+            padding: 2px 6px;
+            border-radius: 4px
+        }
+
+        .code-line.num {
+            color: #94a3b8;
+            width: 36px;
+            display: inline-block
+        }
+
+        .code-line.hl {
+            background: linear-gradient(90deg, rgba(34, 197, 94, 0.12), rgba(59, 130, 246, 0.08));
+            outline: 2px solid rgba(37, 99, 235, 0.08)
+        }
+
+        .panel {
+            background: var(--card);
+            padding: 12px;
+            border-radius: 12px;
+            border: 1px solid rgba(15, 23, 36, 0.04);
+            height: 720px;
+            display: flex;
+            flex-direction: column
+        }
+
+        .panel h3 {
+            margin: 0 0 8px 0;
+            color: var(--accent);
+            font-size: 14px
+        }
+
+        .stack,
+        .log {
+            background: linear-gradient(180deg, rgba(2, 6, 23, 0.02), transparent);
+            padding: 8px;
+            border-radius: 8px;
+            overflow: auto;
+            flex: 1;
+            margin-bottom: 8px;
+            border: 1px solid rgba(15, 23, 36, 0.03)
+        }
+
+        .frame {
+            padding: 8px;
+            border-radius: 6px;
+            margin-bottom: 6px;
+            background: #f1f5f9;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 13px
+        }
+
+        .frame.active {
+            outline: 2px solid rgba(16, 185, 129, 0.12);
+            box-shadow: 0 6px 18px rgba(2, 6, 23, 0.04)
+        }
+
+        .logEntry {
+            font-size: 13px;
+            padding: 6px;
+            border-radius: 6px;
+            margin-bottom: 6px;
+            background: transparent;
+            color: var(--muted)
+        }
+
+        footer {
+            padding: 12px 18px;
+            color: var(--muted);
+            font-size: 13px
+        }
+
+        @media (max-width:1100px) {
+            main {
+                grid-template-columns: 1fr
+            }
+
+            .panel {
+                height: auto
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <header>
+        <h1>Merge Sort 可视化（数字移动动画）</h1>
+        <div class="controls">
+            <button id="btn-random" class="btn">随机数组</button>
+            <label style="display:flex;align-items:center;gap:6px"><span>元素</span>
+                <input id="input-n" type="number" min="4" max="40" value="12"
+                    style="width:64px;padding:6px;border-radius:6px;background:transparent;color:inherit;border:1px solid rgba(15,23,36,0.06)"></label>
+            <button id="btn-start" class="btn">开始</button>
+            <button id="btn-pause" class="btn">暂停/继续</button>
+            <button id="btn-step" class="btn">单步</button>
+            <label style="display:flex;align-items:center;gap:6px"><span>速度</span>
+                <input id="speed" type="range" min="50" max="1000" value="240" style="width:140px"></label>
+        </div>
+    </header>
+    <main>
+        <section class="visual">
+            <div class="status">
+                <div class="chip">模式: <span id="mode">自动</span></div>
+                <div class="chip">步数: <span id="stepCount">0</span></div>
+                <div class="chip">当前操作: <span id="currentOp">—</span></div>
+            </div>
+
+            <div class="array-wrap">
+                <div class="tmp-area" id="tmpArea" aria-label="临时数组区域"></div>
+                <div class="array-area" id="arrayArea" aria-label="数组可视化区域"></div>
+            </div>
+
+            <div class="code-panel">
+                <pre class="code" id="codeBlock" aria-label="代码展示"><code id="codeLines"></code></pre>
+                <div style="flex:0 0 380px;display:flex;flex-direction:column;gap:8px">
+                    <div style="font-weight:600;color:var(--accent2)">对应 C++ 代码（逐行高亮）</div>
+                    <div style="font-size:13px;color:var(--muted)">高亮会随着算法执行逐步移动到相关语句，帮助你理解递归与合并时机。</div>
+                    <div style="margin-top:8px"><button id="btn-reset" class="btn">重置</button> <button id="btn-runsort"
+                            class="btn">快速排序（无动画）</button></div>
+                </div>
+            </div>
+
+        </section>
+
+        <aside class="panel">
+            <h3>递归调用栈（顶部为当前调用）</h3>
+            <div class="stack" id="stack"></div>
+            <h3>日志</h3>
+            <div class="log" id="log"></div>
+        </aside>
+    </main>
+    <footer>
+        说明：数字会以浮动块从数组位置移动到临时槽（tmp），然后再从 tmp 动画移动回数组，直观展示“移动到 tmp”与“写回”的过程。
+    </footer>
+
+    <script>
+        // C++ 代码行（用于高亮）
+        const cppLines = [
+            `void Merge(int a[], int s, int m, int e, int tmp[]) {`,
+            `    int pb = 0;`,
+            `    int p1 = s, p2 = m + 1;`,
+            `    while (p1 <= m && p2 <= e) {`,
+            `        if (a[p1] < a[p2])`,
+            `            tmp[pb++] = a[p1++];`,
+            `        else`,
+            `            tmp[pb++] = a[p2++];`,
+            `    }`,
+            `    while (p1 <= m) tmp[pb++] = a[p1++];`,
+            `    while (p2 <= e) tmp[pb++] = a[p2++];`,
+            `    for (int i = 0; i < e - s + 1; ++i)`,
+            `        a[s + i] = tmp[i];`,
+            `}`,
+            ``,
+            `void MergeSort(int a[], int s, int e, int tmp[]) {`,
+            `    if (s < e) {`,
+            `        int m = s + (e - s) / 2;`,
+            `        MergeSort(a, s, m, tmp);`,
+            `        MergeSort(a, m + 1, e, tmp);`,
+            `        Merge(a, s, m, e, tmp);`,
+            `    }`,
+            `}`
+        ];
+
+        // render code block
+        const codeLinesEl = document.getElementById('codeLines');
+        function renderCode() { codeLinesEl.innerHTML = ''; cppLines.forEach((ln, i) => { const span = document.createElement('span'); span.className = 'code-line'; span.dataset.line = i; span.innerHTML = `<span class= num>${String(i + 1).padStart(2, ' ')}</span> ${escapeHtml(ln)}`; codeLinesEl.appendChild(span); }); }
+        function escapeHtml(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+        function highlightLine(i) { document.querySelectorAll('.code-line').forEach(el => el.classList.remove('hl')); const el = document.querySelector(`.code-line[data-line=\"${i}\"]`); if (el) el.classList.add('hl'), el.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+
+        // DOM & 状态
+        const arrayArea = document.getElementById('arrayArea');
+        const tmpArea = document.getElementById('tmpArea');
+        const stackEl = document.getElementById('stack');
+        const logEl = document.getElementById('log');
+        const modeEl = document.getElementById('mode');
+        const currentOpEl = document.getElementById('currentOp');
+        const stepCountEl = document.getElementById('stepCount');
+
+        let arr = [];
+        let n = parseInt(document.getElementById('input-n').value, 10);
+        let bars = [];
+        let speed = parseInt(document.getElementById('speed').value, 10);
+        let isRunning = false; let isPaused = false; let stepMode = false; let stepResolve = null; let stepCounter = 0;
+
+        renderCode();
+
+        function log(msg) { const d = document.createElement('div'); d.className = 'logEntry'; d.textContent = new Date().toLocaleTimeString() + ' - ' + msg; logEl.prepend(d); if (logEl.children.length > 300) logEl.removeChild(logEl.lastChild); }
+        function pushFrame(s, e) { const el = document.createElement('div'); el.className = 'frame active'; el.dataset.s = s; el.dataset.e = e; el.innerHTML = `<div class=range>[${s},${e}]</div><div>状态: <span class=small>in</span></div>`; Array.from(stackEl.children).forEach(c => c.classList.remove('active')); stackEl.prepend(el); }
+        function popFrame() { const top = stackEl.firstElementChild; if (!top) return; top.classList.remove('active'); top.style.opacity = 0.6; top.querySelector('div:nth-child(2)').innerHTML = '状态: <span class=small>out</span>'; }
+        function sleep(ms) { return new Promise(res => setTimeout(res, ms)); }
+        async function waitStep() { stepCountEl.textContent = stepCounter; if (stepMode) { modeEl.textContent = '单步'; await new Promise(res => stepResolve = res); stepResolve = null; } else { modeEl.textContent = isPaused ? '暂停' : '自动'; while (isPaused) await sleep(50); await sleep(speed); } stepCounter++; stepCountEl.textContent = stepCounter; }
+
+        function createArray(len) { arr = Array.from({ length: len }, () => Math.floor(Math.random() * 90) + 10); renderArray(); renderTmpSlots(len); log('生成随机数组，长度=' + len); }
+
+        function renderTmpSlots(len) { tmpArea.innerHTML = ''; for (let i = 0; i < len; i++) { const slot = document.createElement('div'); slot.className = 'tmp-slot'; slot.dataset.i = i; slot.textContent = ''; tmpArea.appendChild(slot); } }
+
+        function renderArray() { arrayArea.innerHTML = ''; bars = []; const maxv = Math.max(...arr); arr.forEach((v, i) => { const bar = document.createElement('div'); bar.className = 'bar'; bar.style.height = (v / maxv * 100) + '%'; bar.title = v; bar.dataset.i = i; const label = document.createElement('div'); label.className = 'label'; label.textContent = v; bar.appendChild(label); arrayArea.appendChild(bar); bars.push(bar); }); }
+
+        function getRelPos(el, container) { const e = el.getBoundingClientRect(); const c = container.getBoundingClientRect(); return { left: e.left - c.left + container.scrollLeft, top: e.top - c.top + container.scrollTop, width: e.width, height: e.height }; }
+
+        function createFloatingFromBar(index, text) {
+            const bar = bars[index];
+            const wrap = document.querySelector('.array-wrap');
+            const r = getRelPos(bar, wrap);
+            const f = document.createElement('div'); f.className = 'floating'; f.textContent = text; f.style.left = (r.left + (r.width / 2) - 24) + 'px'; f.style.top = (r.top + (r.height / 2) - 16) + 'px'; f.style.opacity = 1; document.querySelector('.array-wrap').appendChild(f);
+            return f;
+        }
+
+        function createFloatingFromTmp(slotIndex, text) {
+            const slot = tmpArea.children[slotIndex];
+            const wrap = document.querySelector('.array-wrap');
+            const r = getRelPos(slot, wrap);
+            const f = document.createElement('div'); f.className = 'floating'; f.textContent = text; f.style.left = (r.left + (r.width / 2) - 24) + 'px'; f.style.top = (r.top + (r.height / 2) - 16) + 'px'; document.querySelector('.array-wrap').appendChild(f); return f;
+        }
+
+        function animateMove(elem, targetX, targetY, duration = 300) {
+            return new Promise(res => {
+                elem.style.transition = `left ${duration}ms ease, top ${duration}ms ease, transform ${duration}ms ease, opacity 150ms`;
+                requestAnimationFrame(() => {
+                    elem.style.left = targetX + 'px'; elem.style.top = targetY + 'px';
+                });
+                setTimeout(() => { res(); }, duration + 20);
+            });
+        }
+
+        // 将 a[index] 的可视化数移动到 tmp slot 'slotIdx'
+        async function animateMoveToTmp(index, slotIdx) {
+            const wrap = document.querySelector('.array-wrap');
+            const bar = bars[index];
+            const slot = tmpArea.children[slotIdx];
+            const from = getRelPos(bar, wrap); const to = getRelPos(slot, wrap);
+            const f = createFloatingFromBar(index, arr[index]);
+            // 目标为 tmp 中心
+            const tx = to.left + (to.width / 2) - 24; const ty = to.top + (to.height / 2) - 16;
+            await animateMove(f, tx, ty, Math.max(180, speed * 0.6));
+            // 在 tmp 槽中写入文本
+            slot.textContent = f.textContent;
+            f.style.opacity = 0; setTimeout(() => f.remove(), 120);
+        }
+
+        // 从 tmp slot 移动到 array 的目标位置 s+i
+        async function animateMoveFromTmpToArray(slotIdx, targetIndex) {
+            const wrap = document.querySelector('.array-wrap');
+            const slot = tmpArea.children[slotIdx];
+            const targetBar = bars[targetIndex];
+            const from = getRelPos(slot, wrap); const to = getRelPos(targetBar, wrap);
+            const f = createFloatingFromTmp(slotIdx, slot.textContent || '');
+            const tx = to.left + (to.width / 2) - 24; const ty = to.top + (to.height / 2) - 16;
+            // 清空 tmp slot（视觉上）
+            slot.textContent = '';
+            await animateMove(f, tx, ty, Math.max(200, speed * 0.6));
+            // 更新目标 bar 显示并删除 floating
+            targetBar.querySelector('.label').textContent = f.textContent; // update label
+            // adjust height proportionally
+            const maxv = Math.max(...arr);
+            targetBar.style.height = (Number(f.textContent) / maxv * 100) + '%';
+            f.style.opacity = 0; setTimeout(() => f.remove(), 120);
+        }
+
+        // ========== 代码行映射 ==========
+        const LINE = { MERGE_START: 0, PB_DECL: 1, P_DECL: 2, WHILE_COMPARE: 3, IF_COMPARE: 4, TMP_PUSH_LEFT: 5, ELSE_TMP_PUSH: 7, WHILE_LEFT: 9, WHILE_RIGHT: 10, FOR_WRITE: 11, WRITE_A: 12, MERGESORT_START: 14, IF_S_LT_E: 15, M_DECL: 16, RECUR_LEFT: 17, RECUR_RIGHT: 18, MERGE_CALL: 19 };
+
+        // 带动画的 merge
+        async function merge(a, s, m, e) {
+            currentOpEl.textContent = `Merge [${s},${m}] & [${m + 1},${e}]`;
+            log(`合并: [${s},${m}] 和 [${m + 1},${e}]`);
+            pushFrame(s, e);
+
+            highlightLine(LINE.MERGE_START); await waitStep();
+            highlightLine(LINE.P_DECL); await waitStep();
+            highlightLine(LINE.WHILE_COMPARE);
+
+            // 清空对应 tmp visual 区间（显示在 tmp 的前 len slots）
+            const tmpSlotsCount = e - s + 1;
+            // make sure tmpArea has at least that many slots visible
+            // we will use first tmpSlotsCount slots starting at index 0 for simplicity
+            // visually clear those slots
+            for (let i = 0; i < tmpSlotsCount; i++) { tmpArea.children[i].textContent = ''; }
+
+            let tmpArr = [];
+            let pb = 0;
+            let p1 = s, p2 = m + 1;
+            while (p1 <= m && p2 <= e) {
+                highlightLine(LINE.IF_COMPARE);
+                bars[p1].classList.add('comparing'); bars[p2].classList.add('comparing');
+                currentOpEl.textContent = `比较 a[${p1}]=${a[p1]} 与 a[${p2}]=${a[p2]}`;
+                await waitStep();
+                bars[p1].classList.remove('comparing'); bars[p2].classList.remove('comparing');
+                if (a[p1] < a[p2]) {
+                    highlightLine(LINE.TMP_PUSH_LEFT);
+                    // animate bar p1 -> tmp slot pb
+                    await animateMoveToTmp(p1, pb);
+                    tmpArr.push(a[p1]); pb++; p1++;
+                } else {
+                    highlightLine(LINE.ELSE_TMP_PUSH);
+                    await animateMoveToTmp(p2, pb);
+                    tmpArr.push(a[p2]); pb++; p2++;
+                }
+            }
+            while (p1 <= m) { highlightLine(LINE.WHILE_LEFT); await animateMoveToTmp(p1, pb); tmpArr.push(a[p1]); pb++; p1++; }
+            while (p2 <= e) { highlightLine(LINE.WHILE_RIGHT); await animateMoveToTmp(p2, pb); tmpArr.push(a[p2]); pb++; p2++; }
+
+            // 写回：从 tmp slot(0..tmpArr.length-1) 到 a[s+i]
+            highlightLine(LINE.FOR_WRITE);
+            for (let i = 0; i < tmpArr.length; i++) {
+                highlightLine(LINE.WRITE_A);
+                // set the logical array value
+                a[s + i] = tmpArr[i];
+                currentOpEl.textContent = `写回 a[${s + i}] = ${a[s + i]}`;
+                // animate tmp slot i -> array index s+i
+                await animateMoveFromTmpToArray(i, s + i);
+                // reflect in arr and bars data (labels already updated in animate)
+                await waitStep();
+            }
+
+            popFrame(); currentOpEl.textContent = `合并结束 [${s},${e}]`;
+            log(`合并完成: [${s},${e}] -> ${a.slice(s, e + 1).join(',')}`);
+            highlightLine(LINE.MERGE_START); await sleep(80);
+        }
+
+        async function mergeSort(a, s, e) {
+            highlightLine(LINE.MERGESORT_START);
+            pushFrame(s, e);
+            currentOpEl.textContent = `进入 mergeSort([${s},${e}])`;
+            log(`调用 mergeSort([${s},${e}])`);
+            await waitStep();
+
+            highlightLine(LINE.IF_S_LT_E);
+            if (s >= e) { popFrame(); currentOpEl.textContent = '返回 (空或单元素)'; log(`返回 mergeSort([${s},${e}])`); await waitStep(); return; }
+
+            highlightLine(LINE.M_DECL); await waitStep();
+            const m = Math.floor((s + e) / 2);
+            highlightLine(LINE.RECUR_LEFT);
+            await mergeSort(a, s, m);
+            highlightLine(LINE.RECUR_RIGHT);
+            await mergeSort(a, m + 1, e);
+            highlightLine(LINE.MERGE_CALL);
+            await merge(a, s, m, e);
+
+            popFrame(); currentOpEl.textContent = `返回 mergeSort([${s},${e}])`;
+            log(`返回 mergeSort([${s},${e}])`);
+            await waitStep();
+        }
+
+        // 非动画排序
+        function runSortOnce() { const copy = [...arr]; function simpleMergeSort(a) { if (a.length <= 1) return a; const mid = Math.floor(a.length / 2); const L = simpleMergeSort(a.slice(0, mid)); const R = simpleMergeSort(a.slice(mid)); let res = [], i = 0, j = 0; while (i < L.length && j < R.length) res.push(L[i] < R[j] ? L[i++] : R[j++]); while (i < L.length) res.push(L[i++]); while (j < R.length) res.push(R[j++]); return res; } arr = simpleMergeSort(copy); renderArray(); log('一次运行完成：已排序（无动画）'); }
+
+        // 事件绑定
+        document.getElementById('btn-random').addEventListener('click', () => { n = parseInt(document.getElementById('input-n').value, 10); createArray(n); });
+        document.getElementById('btn-reset').addEventListener('click', () => { isRunning = false; isPaused = false; stepMode = false; stepResolve && stepResolve(); stepCounter = 0; stepCountEl.textContent = 0; currentOpEl.textContent = '—'; modeEl.textContent = '自动'; log('已重置'); renderCode(); createArray(n); });
+        document.getElementById('btn-start').addEventListener('click', async () => { if (isRunning) return; isRunning = true; isPaused = false; stepMode = false; modeEl.textContent = '自动'; log('开始动画归并排序'); await mergeSort(arr, 0, arr.length - 1); isRunning = false; currentOpEl.textContent = '完成'; log('排序完成'); });
+        document.getElementById('btn-pause').addEventListener('click', () => { if (!isRunning) return; isPaused = !isPaused; modeEl.textContent = isPaused ? '暂停' : '自动'; log(isPaused ? '暂停动画' : '继续动画'); });
+        document.getElementById('btn-step').addEventListener('click', () => { if (!isRunning) { isRunning = true; stepMode = true; isPaused = false; stepCounter = 0; modeEl.textContent = '单步'; log('进入单步模式并开始'); mergeSort(arr, 0, arr.length - 1).then(() => { isRunning = false; log('单步排序结束') }); } else { if (stepResolve) stepResolve(); } });
+        document.getElementById('speed').addEventListener('input', (e) => { speed = parseInt(e.target.value, 10); });
+        document.getElementById('btn-runsort').addEventListener('click', () => { runSortOnce(); });
+
+        // init
+        createArray(n);
+        window.addEventListener('resize', () => { renderArray(); renderTmpSlots(n); });
+        document.addEventListener('keydown', (e) => { if (e.key === ' ') { if (stepMode && stepResolve) stepResolve(); else if (isRunning) { isPaused = !isPaused; modeEl.textContent = isPaused ? '暂停' : '自动'; } } });
+
+    </script>
+</body>
+
+</html>

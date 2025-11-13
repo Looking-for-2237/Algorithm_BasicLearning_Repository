@@ -1,0 +1,424 @@
+<!doctype html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>0/1 背包计数（体积=40）——二维 DP 可视化（含源码遍历 & 撤销）</title>
+    <style>
+        :root {
+            font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+        }
+
+        body {
+            margin: 18px;
+            background: #f7fafc;
+            color: #0f172a
+        }
+
+        h1 {
+            font-size: 20px;
+            margin: 0 0 12px
+        }
+
+        .controls {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            margin-bottom: 12px;
+            flex-wrap: wrap
+        }
+
+        input,
+        textarea,
+        select,
+        button {
+            font-size: 14px;
+            padding: 6px;
+            border: 1px solid #cbd5e1;
+            border-radius: 6px
+        }
+
+        textarea {
+            width: 380px;
+            height: 80px
+        }
+
+        .panel {
+            background: #fff;
+            padding: 12px;
+            border-radius: 10px;
+            box-shadow: 0 6px 18px rgba(2, 6, 23, 0.06);
+        }
+
+        table {
+            border-collapse: collapse;
+            font-size: 13px
+        }
+
+        td,
+        th {
+            border: 1px solid #e6eef8;
+            padding: 6px;
+            text-align: center;
+            min-width: 54px
+        }
+
+        .wcol {
+            background: #eef2ff
+        }
+
+        .cur {
+            outline: 3px solid #ffd86b
+        }
+
+        .sumline {
+            background: #ecfdf5
+        }
+
+        .small {
+            font-size: 12px;
+            color: #475569
+        }
+
+        .flex {
+            display: flex;
+            gap: 12px
+        }
+
+        .legend {
+            margin-top: 8px;
+            font-size: 13px
+        }
+
+        .highlightAdd {
+            background: #d1fae5
+        }
+
+        .highlightStay {
+            background: #fef3c7
+        }
+
+        .codeBox {
+            background: #0b1220;
+            color: #e6eef8;
+            padding: 12px;
+            border-radius: 8px;
+            overflow: auto;
+            max-height: 520px;
+            font-family: Consolas, monospace;
+            font-size: 13px
+        }
+
+        .codeLine {
+            display: block;
+            padding: 2px 6px;
+            border-left: 4px solid transparent
+        }
+
+        .codeHL {
+            background: #203040;
+            border-left-color: #ffd86b
+        }
+
+        .meta {
+            font-size: 13px;
+            color: #334155;
+            margin-bottom: 8px
+        }
+
+        .kbd {
+            background: #f1f5f9;
+            padding: 6px;
+            border-radius: 6px;
+            font-family: monospace
+        }
+    </style>
+</head>
+
+<body>
+    <div class="panel">
+        <h1>0/1 背包计数（目标体积 = 40） — 二维 DP 可视化（含源码遍历 & 撤销）</h1>
+        <div class="controls">
+            <label class="small">N：<input id="N" type="number" value="6" min="1" max="20" style="width:72px"></label>
+            <label class="small">物品体积（空格/逗号分隔）：<input id="items" value="10 10 10 5 5 0" style="width:300px"></label>
+            <button id="build">构建表格 & 加载源码</button>
+            <button id="step">单步</button>
+            <button id="play">自动播放</button>
+            <button id="stop" disabled>停止</button>
+            <button id="back" disabled>上一步</button>
+            <button id="reset">重置</button>
+            <label class="small">延迟(ms)：<input id="delay" type="number" value="500" style="width:84px"></label>
+        </div>
+        <div class="meta">可视化目标：清晰展示二维数组 <span class="kbd">Ways[w][k]</span> 的填表过程，并且在右侧显示**原始 C++
+            源码**，当前执行到的代码行会高亮（与表格行/列同步）。支持“上一步”撤销最近一次单步操作。</div>
+        <div class="flex">
+            <div style="min-width:540px">
+                <div class="small">说明：表格行表示容量 w = 0..40，列表示已考虑前 k 件物品（k=0 表示未使用任何物品）。单元格 Ways[w][k] 为方案数。</div>
+                <div id="tableWrap"
+                    style="margin-top:8px;overflow:auto;max-height:520px;border-radius:8px;background:#fff;padding:8px">
+                </div>
+                <div class="legend">高亮：<span
+                        style="display:inline-block;width:14px;height:14px;background:#d1fae5;margin-right:6px;vertical-align:middle;border-radius:3px"></span>
+                    由 <code>Ways[w-a[k]][k-1]</code> 增加的部分&nbsp;&nbsp;<span
+                        style="display:inline-block;width:14px;height:14px;background:#fef3c7;margin-right:6px;vertical-align:middle;border-radius:3px"></span>
+                    由 <code>Ways[w][k-1]</code> 继承的部分</div>
+            </div>
+            <div style="flex:1;min-width:420px">
+                <div class="panel" style="padding:10px;">
+                    <div><strong>当前状态</strong></div>
+                    <div id="status" style="margin-top:8px">还未构建表格</div>
+                    <hr>
+                    <div><strong>C++ 源码（运行时高亮）</strong></div>
+                    <div id="code" class="codeBox" style="margin-top:8px">（请先点击“构建表格 & 加载源码”）</div>
+                    <hr>
+                    <div><strong>运行信息</strong></div>
+                    <div id="runinfo" class="small" style="margin-top:8px">—</div>
+                    <hr>
+                    <div><strong>最终结果</strong></div>
+                    <div style="margin-top:8px">目标 40 的方案数： <span id="answer" style="font-weight:700">0</span></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const TARGET = 40;
+        let N = 0; let items = [];
+        let Ways; // 2D array (TARGET+1) x (N+1)
+        let curW = 1, curK = 1; // next step indices
+        let playing = false; let timer = null;
+        let history = []; // 用于撤销：保存历史快照（每步改动前）
+
+        // 原始 C++ 源码（逐行放入数组以便高亮）
+        const cppLines = [
+            "#include <iostream>",
+            "#include <cstring>",
+            "using namespace std;",
+            "int a[30];",
+            "int N;",
+            "int Ways[50][30];",
+            "int main(void)",
+            "{",
+            "    cin >> N;",
+            "    memset(Ways, 0, sizeof(Ways));",
+            "    for (int i = 1; i <= N; ++i)",
+            "    {",
+            "        cin >> a[i];",
+            "        Ways[0][i] = 1;",
+            "    }",
+            "    Ways[0][0] = 1;",
+            "    for (int w = 1; w <= 40; ++w)",
+            "    {",
+            "        for (int k = 1; k <= N; ++k)",
+            "        {",
+            "            Ways[w][k] = Ways[w][k - 1];",
+            "            if (w - a[k] >= 0)",
+            "                Ways[w][k] += Ways[w - a[k]][k - 1];",
+            "        }",
+            "    }",
+            "    cout << Ways[40][N];",
+            "    return 0;",
+            "}",
+        ];
+
+        function renderCode() {
+            const wrap = document.getElementById('code');
+            let html = '';
+            for (let i = 0; i < cppLines.length; i++) {
+                const ln = i + 1;
+                html += `<span id="L${ln}" class="codeLine"><strong style="display:inline-block;width:28px;color:#94a3b8">${ln}</strong>${escapeHtml(cppLines[i])}</span>`;
+            }
+            wrap.innerHTML = html;
+        }
+
+        function escapeHtml(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+
+        function clearCodeHL() {
+            for (let i = 1; i <= cppLines.length; i++) { const el = document.getElementById('L' + i); if (el) el.classList.remove('codeHL'); }
+        }
+        function highlightCode(lines) { clearCodeHL(); for (const ln of lines) { const el = document.getElementById('L' + ln); if (el) el.classList.add('codeHL'); } }
+
+        function build() {
+            N = Math.max(1, Math.min(20, parseInt(document.getElementById('N').value) || 1));
+            const raw = document.getElementById('items').value.trim();
+            items = raw === '' ? [] : raw.split(/[ ,]+/).map(x => parseInt(x) || 0);
+            while (items.length < N) items.push(0);
+            if (items.length > N) items = items.slice(0, N);
+
+            Ways = Array.from({ length: TARGET + 1 }, () => Array(N + 1).fill(0));
+            // 初始化 Ways[0][*] = 1
+            for (let k = 0; k <= N; k++) Ways[0][k] = 1;
+            curW = 1; curK = 1;
+            history = [];
+            renderTable();
+            renderCode();
+            updateStatus('已初始化表格并加载源码。准备开始从 w=1..40, k=1..N 填表。');
+            updateRunInfo('初始：Ways[0][k] = 1 (k=0..N)');
+            highlightStartup();
+            document.getElementById('back').disabled = true;
+        }
+
+        function renderTable() {
+            const wrap = document.getElementById('tableWrap');
+            let html = '<table><thead><tr><th>w\k</th>';
+            for (let k = 0; k <= N; k++) html += `<th>${k}</th>`;
+            html += '</tr></thead><tbody>';
+            for (let w = 0; w <= TARGET; w++) {
+                html += `<tr${w === 0 ? ' class="sumline"' : ''}><th class="wcol">${w}</th>`;
+                for (let k = 0; k <= N; k++) {
+                    html += `<td id="c_${w}_${k}">${Ways[w][k]}</td>`;
+                }
+                html += '</tr>';
+            }
+            html += '</tbody></table>';
+            wrap.innerHTML = html;
+        }
+
+        function updateCell(w, k, val, cls) {
+            const td = document.getElementById(`c_${w}_${k}`);
+            if (!td) return;
+            td.textContent = val;
+            td.className = cls || '';
+        }
+
+        function pushHistory() {
+            // 保存当前状态（在执行修改之前调用）
+            const snapshot = {
+                curW, curK,
+                Ways: Ways.map(row => row.slice())
+            };
+            history.push(snapshot);
+            document.getElementById('back').disabled = false;
+        }
+
+        function undoStep() {
+            if (!history.length) { updateStatus('没有可撤销的步骤'); return; }
+            const snap = history.pop();
+            Ways = snap.Ways.map(row => row.slice());
+            curW = snap.curW; curK = snap.curK;
+            // 更新界面
+            for (let w = 0; w <= TARGET; w++) for (let k = 0; k <= N; k++) {
+                const td = document.getElementById(`c_${w}_${k}`);
+                if (td) { td.textContent = Ways[w][k]; td.className = ''; }
+            }
+            document.getElementById('answer').textContent = Ways[TARGET][N];
+            updateStatus(`已撤销一步，回到 w=${curW}, k=${curK}`);
+            updateRunInfo('撤销：表格与索引已恢复到上一步状态。');
+            // 高亮即将执行的行（外层/内层循环）
+            highlightCode([17, 19]);
+            if (!history.length) document.getElementById('back').disabled = true;
+        }
+
+        function step() {
+            if (!Ways) { updateStatus('请先点击【构建表格 & 加载源码】'); return; }
+            if (curW > TARGET) { updateStatus('已完成全部计算。'); playing = false; stopAuto(); highlightCode([26]); return; }
+
+            // 将当前状态保存到 history（以便撤销）
+            pushHistory();
+
+            // 高亮正在执行的源码行：外层/内层循环
+            // 正确映射：
+            // 17: for (int w = 1; w <= 40; ++w)
+            // 19: for (int k = 1; k <= N; ++k)
+            // 21: Ways[w][k] = Ways[w][k - 1];
+            // 22: if (w - a[k] >= 0)
+            // 23:     Ways[w][k] += Ways[w - a[k]][k - 1];
+            highlightCode([17, 19]);
+
+            const k = curK; const w = curW; const ak = items[k - 1] || 0;
+            // mark sources (show values before更新)
+            clearHighlights();
+            updateCell(w, k - 1, Ways[w][k - 1], 'highlightStay');
+            if (w - ak >= 0) updateCell(w - ak, k - 1, Ways[w - ak][k - 1], 'highlightAdd');
+            updateRunInfo(`准备计算：w=${w}, k=${k}, a[k]=${ak}`);
+
+            setTimeout(() => {
+                // 映射到 Ways[w][k] 的赋值行（21）
+                highlightCode([21]);
+                const stay = Ways[w][k - 1];
+                let add = 0;
+                if (w - ak >= 0) add = Ways[w - ak][k - 1];
+
+                // 如果存在可加项，则高亮 if 分支（22,23）
+                if (w - ak >= 0) highlightCode([21, 22, 23]);
+
+                const newVal = stay + add;
+                Ways[w][k] = newVal;
+                updateCell(w, k, newVal, 'cur');
+                document.getElementById('answer').textContent = Ways[TARGET][N];
+
+                // advance indices：与原 C++ 一致（内层 k 从 1..N，外层 w）
+                curK++;
+                if (curK > N) { curK = 1; curW++; }
+
+                updateStatus(`已处理 w=${w}, k=${k} （a[${k}]=${ak}）。`);
+                updateRunInfo(`Ways[${w}][${k}] = Ways[${w}][${k - 1}] (${stay})` + (add ? ` + Ways[${w - ak}][${k - 1}] (${add}) = ${newVal}` : ` = ${newVal}`));
+
+                // 清理当前单元格高亮（保留数值显示）
+                setTimeout(() => { const el = document.getElementById(`c_${w}_${k}`); if (el) el.classList.remove('cur'); }, 300);
+            }, 300);
+        }
+
+        function clearHighlights() {
+            for (let w = 0; w <= TARGET; w++) {
+                for (let k = 0; k <= N; k++) {
+                    const td = document.getElementById(`c_${w}_${k}`);
+                    if (td) td.className = '';
+                }
+            }
+            for (let w = 0; w <= TARGET; w++) for (let k = 0; k <= N; k++) {
+                const td = document.getElementById(`c_${w}_${k}`);
+                if (td) td.textContent = Ways[w][k];
+            }
+        }
+
+        function playAuto() {
+            if (!Ways) { updateStatus('请先点击【构建表格 & 加载源码】'); return; }
+            if (playing) return;
+            playing = true; document.getElementById('play').disabled = true; document.getElementById('stop').disabled = false;
+            const delay = Math.max(20, parseInt(document.getElementById('delay').value) || 500);
+            timer = setInterval(() => {
+                if (curW > TARGET) { updateStatus('已完成全部计算。'); stopAuto(); highlightCode([26]); return; }
+                step();
+            }, delay);
+        }
+
+        function stopAuto() {
+            playing = false; document.getElementById('play').disabled = false; document.getElementById('stop').disabled = true;
+            if (timer) clearInterval(timer); timer = null;
+        }
+
+        function resetAll() {
+            if (timer) clearInterval(timer);
+            Ways = null; curW = 1; curK = 1; playing = false; timer = null; history = [];
+            document.getElementById('tableWrap').innerHTML = '';
+            document.getElementById('status').textContent = '已重置。';
+            document.getElementById('runinfo').textContent = '—';
+            document.getElementById('answer').textContent = '0';
+            clearCodeHL();
+            document.getElementById('play').disabled = false; document.getElementById('stop').disabled = true; document.getElementById('back').disabled = true;
+        }
+
+        function updateStatus(s) { document.getElementById('status').textContent = s; }
+        function updateRunInfo(s) { document.getElementById('runinfo').textContent = s; }
+
+        function highlightStartup() {
+            // 高亮输入和初始化相关的源码行（示意）
+            highlightCode([9, 10, 11, 12, 13, 14, 16]);
+        }
+
+        // UI hook
+        n = document.getElementById('build'); if (n) n.addEventListener('click', () => { stopAuto(); build(); });
+        document.getElementById('step').addEventListener('click', () => { stopAuto(); step(); });
+        document.getElementById('play').addEventListener('click', () => { playAuto(); });
+        document.getElementById('stop').addEventListener('click', () => { stopAuto(); });
+        document.getElementById('back').addEventListener('click', () => { stopAuto(); undoStep(); });
+        document.getElementById('reset').addEventListener('click', () => { resetAll(); });
+
+        // initial render: only code skeleton (no table)
+        renderCode();
+    </script>
+</body>
+
+</html>

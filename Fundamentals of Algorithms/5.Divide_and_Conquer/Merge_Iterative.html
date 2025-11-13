@@ -1,0 +1,535 @@
+<!doctype html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>归并排序（循环/自底向上）动画演示</title>
+    <style>
+        :root {
+            --bg: #f7fbff;
+            --panel: #ffffff;
+            --accent: #2b6cb0;
+            --accent-2: #2f855a;
+            --muted: #6b7280;
+            --bar: #60a5fa;
+            --bar-2: #38b2ac;
+            --danger: #e53e3e;
+            font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+        }
+
+        html,
+        body {
+            height: 100%;
+            margin: 0;
+            background: var(--bg);
+        }
+
+        .wrap {
+            max-width: 1100px;
+            margin: 18px auto;
+            padding: 18px;
+        }
+
+        header {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            margin-bottom: 12px
+        }
+
+        h1 {
+            font-size: 20px;
+            margin: 0
+        }
+
+        .controls {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap
+        }
+
+        .controls>* {
+            background: var(--panel);
+            padding: 8px;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(2, 6, 23, 0.06);
+        }
+
+        input[type=text] {
+            min-width: 240px;
+            padding: 6px;
+            border-radius: 6px;
+            border: 1px solid #e6eef8
+        }
+
+        button {
+            cursor: pointer;
+            border: 0;
+            background: var(--accent);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 8px
+        }
+
+        button.secondary {
+            background: var(--accent-2)
+        }
+
+        button.ghost {
+            background: transparent;
+            color: var(--muted);
+            border: 1px solid #e6eef8
+        }
+
+        .status {
+            margin-left: 8px;
+            color: var(--muted);
+            font-size: 14px
+        }
+
+        .main {
+            display: grid;
+            grid-template-columns: 1fr 360px;
+            gap: 16px
+        }
+
+        .visual {
+            background: var(--panel);
+            padding: 14px;
+            border-radius: 12px;
+            min-height: 320px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px
+        }
+
+        /* bars */
+        .bars-wrap {
+            flex: 1;
+            display: flex;
+            align-items: end;
+            gap: 6px;
+            padding: 10px;
+            border-radius: 8px;
+            background: linear-gradient(180deg, #fbfdff, #f3f9ff);
+        }
+
+        .bar {
+            flex: 1 0 20px;
+            height: 60px;
+            border-radius: 6px;
+            display: flex;
+            align-items: flex-end;
+            justify-content: center;
+            transition: height 300ms ease, background-color 200ms;
+            position: relative
+        }
+
+        .bar>span {
+            font-size: 12px;
+            color: #07304a;
+            transform: translateY(-6px)
+        }
+
+        .bar.temp {
+            opacity: 0.9
+        }
+
+        .bar.compare {
+            background: linear-gradient(180deg, #ffe99a, #ffda6f)
+        }
+
+        .bar.taken {
+            background: linear-gradient(180deg, #c6f6d5, #9ae6b4)
+        }
+
+        .bar.copy {
+            background: linear-gradient(180deg, #cfe9ff, #a6d6ff)
+        }
+
+        .temp-row {
+            height: 72px;
+            display: flex;
+            gap: 6px;
+            padding: 6px;
+            border-radius: 8px;
+            background: linear-gradient(0deg, #ffffff, #f6fbff);
+        }
+
+        .temp-wrapper {
+            display: flex;
+            align-items: end;
+            gap: 6px;
+            flex: 1
+        }
+
+        .temp-slot {
+            flex: 1 0 20px;
+            height: 12px;
+            border-radius: 6px;
+            background: #eef6ff;
+            display: flex;
+            align-items: flex-end;
+            justify-content: center;
+            opacity: 0.8
+        }
+
+        .temp-slot>span {
+            font-size: 11px;
+            color: #08304a;
+            transform: translateY(-6px)
+        }
+
+        .sidebar {
+            background: var(--panel);
+            padding: 12px;
+            border-radius: 12px;
+            min-height: 320px
+        }
+
+        .code {
+            background: #0f1724;
+            color: #e6f0ff;
+            padding: 10px;
+            border-radius: 8px;
+            overflow: auto;
+            height: 180px
+        }
+
+        .code pre {
+            margin: 0;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, "Roboto Mono", "Helvetica Neue", monospace;
+            font-size: 13px
+        }
+
+        .hl {
+            background: rgba(255, 255, 255, 0.08);
+            box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.02);
+            border-radius: 4px;
+            padding: 2px 6px
+        }
+
+        .info {
+            margin-top: 10px;
+            color: var(--muted);
+            font-size: 13px
+        }
+
+        footer {
+            margin-top: 12px;
+            text-align: right;
+            color: var(--muted);
+            font-size: 13px
+        }
+
+        @media(max-width:900px) {
+            .main {
+                grid-template-columns: 1fr
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <header>
+            <h1>归并排序（循环 / 自底向上）动画演示</h1>
+            <div class="controls" style="margin-left:12px">
+                <div>
+                    <input id="arrInput" type="text" placeholder="输入数组，用逗号或空格分隔（例：5 2 7 1）" />
+                    <button id="setBtn" class="ghost">设置</button>
+                </div>
+                <div>
+                    <button id="randomBtn" class="ghost">随机数组</button>
+                    <button id="shuffleBtn" class="ghost">小规模随机</button>
+                </div>
+                <div>
+                    <button id="playBtn">播放</button>
+                    <button id="stepBtn" class="ghost">单步</button>
+                    <button id="resetBtn" class="ghost">重置</button>
+                </div>
+                <div style="display:flex;align-items:center;gap:8px;">
+                    <label style="font-size:13px;color:var(--muted)">速度</label>
+                    <input id="speed" type="range" min="0.2" max="2" step="0.1" value="1" />
+                </div>
+            </div>
+            <div class="status" id="status">状态：就绪</div>
+        </header>
+
+        <div class="main">
+            <section class="visual">
+                <div class="temp-row" id="tempRow" title="临时数组（仅显示合并区间的目标槽）">
+                    <div style="width:8px"></div>
+                    <div class="temp-wrapper" id="tempWrapper"></div>
+                </div>
+
+                <div class="bars-wrap" id="barsWrap" aria-hidden="false"></div>
+
+                <div class="info" id="info">操作信息：——</div>
+            </section>
+
+            <aside class="sidebar">
+                <div style="font-weight:600;margin-bottom:8px">伪代码（高亮表示当前执行处）</div>
+                <div class="code">
+                    <pre id="codeArea">
+1  for len = 1; len < n; len *= 2:
+2      for left = 0; left < n - len; left += 2*len:
+3          mid = left + len - 1
+4          right = min(left + 2*len - 1, n - 1)
+5          // 合并 [left..mid] 和 [mid+1..right]
+6          i = left; j = mid+1; k = left
+7          while i <= mid and j <= right:
+8              if A[i] <= A[j]: tmp[k] = A[i]; i++; k++
+9              else: tmp[k] = A[j]; j++; k++
+10         while i <= mid: tmp[k] = A[i]; i++; k++
+11         while j <= right: tmp[k] = A[j]; j++; k++
+12         for p = left..right: A[p] = tmp[p]
+        </pre>
+                </div>
+
+                <div style="margin-top:10px">
+                    <div><strong>len:</strong> <span id="curLen">—</span> &nbsp; <strong>区间:</strong> <span
+                            id="curRange">—</span></div>
+                    <div style="margin-top:8px"><strong>动作：</strong><span id="curAction">—</span></div>
+                </div>
+            </aside>
+        </div>
+
+        <footer>提示：可以用“单步”逐个动作观看；“播放”会自动执行。需要把动画导出或改成递归版告诉我。</footer>
+    </div>
+
+    <script>
+        // 初始化数据 & UI helpers
+        const barsWrap = document.getElementById('barsWrap');
+        const tempWrapper = document.getElementById('tempWrapper');
+        const status = document.getElementById('status');
+        const info = document.getElementById('info');
+        const curLenEl = document.getElementById('curLen');
+        const curRangeEl = document.getElementById('curRange');
+        const curActionEl = document.getElementById('curAction');
+        const codeArea = document.getElementById('codeArea');
+
+        let array = [38, 27, 43, 3, 9, 82, 10];
+        let actions = [];
+        let actionIdx = 0;
+        let timer = null;
+        let playing = false;
+        let speed = 1; // multiplier
+
+        function renderBars() {
+            barsWrap.innerHTML = '';
+            const max = Math.max(...array, 1);
+            for (let i = 0; i < array.length; i++) {
+                const v = array[i];
+                const bar = document.createElement('div');
+                bar.className = 'bar';
+                bar.dataset.index = i;
+                bar.style.height = Math.max(12, (v / max) * 220) + 'px';
+                bar.innerHTML = `<span>${v}</span>`;
+                barsWrap.appendChild(bar);
+            }
+        }
+
+        function renderTemp(length) {
+            tempWrapper.innerHTML = '';
+            for (let i = 0; i < length; i++) {
+                const slot = document.createElement('div');
+                slot.className = 'temp-slot';
+                slot.dataset.index = i;
+                slot.innerHTML = `<span></span>`;
+                tempWrapper.appendChild(slot);
+            }
+        }
+
+        function setStatus(s) { status.textContent = '状态：' + s; }
+
+        // 生成动作（不改变原 array）
+        function genActions(arr) {
+            const n = arr.length;
+            let A = arr.slice();
+            const tmp = new Array(n);
+            const acts = [];
+
+            for (let len = 1; len < n; len *= 2) {
+                for (let left = 0; left < n - len; left += 2 * len) {
+                    const mid = left + len - 1;
+                    const right = Math.min(left + 2 * len - 1, n - 1);
+                    acts.push({ type: 'startMerge', left, mid, right, len });
+
+                    let i = left, j = mid + 1, k = left;
+                    while (i <= mid && j <= right) {
+                        acts.push({ type: 'compare', i, j, left, mid, right, len });
+                        if (A[i] <= A[j]) {
+                            acts.push({ type: 'take', from: i, to: k, val: A[i], left, mid, right, len });
+                            tmp[k] = A[i]; i++; k++;
+                        } else {
+                            acts.push({ type: 'take', from: j, to: k, val: A[j], left, mid, right, len });
+                            tmp[k] = A[j]; j++; k++;
+                        }
+                    }
+                    while (i <= mid) {
+                        acts.push({ type: 'take', from: i, to: k, val: A[i], left, mid, right, len });
+                        tmp[k] = A[i]; i++; k++;
+                    }
+                    while (j <= right) {
+                        acts.push({ type: 'take', from: j, to: k, val: A[j], left, mid, right, len });
+                        tmp[k] = A[j]; j++; k++;
+                    }
+                    // 拷贝回去
+                    for (let p = left; p <= right; p++) {
+                        acts.push({ type: 'copyBack', p, val: tmp[p], left, mid, right, len });
+                        A[p] = tmp[p];
+                    }
+                    acts.push({ type: 'endMerge', left, mid, right, len });
+                }
+            }
+            return acts;
+        }
+
+        // 高亮伪代码简单映射
+        function highlightLine(num) {
+            // 清除所有先前标记
+            const txt = codeArea.innerText.split('\n').map((l, i) => {
+                if (i + 1 === num) return '<span class="hl">' + escapeHtml(l) + '</span>';
+                return escapeHtml(l);
+            }).join('\n');
+            codeArea.innerHTML = txt;
+        }
+        function escapeHtml(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+
+        function doAction(act) {
+            clearHighlights();
+            curLenEl.textContent = act.len ?? '—';
+            curRangeEl.textContent = act.left !== undefined ? '[' + act.left + ' .. ' + act.right + ']' : '—';
+
+            switch (act.type) {
+                case 'startMerge':
+                    renderTemp(act.right - act.left + 1);
+                    info.textContent = `开始合并区间 [${act.left}..${act.mid}] 和 [${act.mid + 1}..${act.right}]`;
+                    curActionEl.textContent = '开始合并';
+                    highlightLine(5);
+                    break;
+                case 'compare':
+                    highlightBar(act.i, 'compare');
+                    highlightBar(act.j, 'compare');
+                    info.textContent = `比较 A[${act.i}] = ${getValue(act.i)} 与 A[${act.j}] = ${getValue(act.j)}`;
+                    curActionEl.textContent = `比较 i=${act.i}, j=${act.j}`;
+                    highlightLine(7);
+                    break;
+                case 'take':
+                    // 在 temp 中显示
+                    const slotIndex = act.to - act.left; // temp slot
+                    const slots = tempWrapper.querySelectorAll('.temp-slot');
+                    if (slots[slotIndex]) {
+                        slots[slotIndex].style.height = Math.max(12, (act.val / Math.max(...array, 1)) * 72) + 'px';
+                        slots[slotIndex].querySelector('span').textContent = act.val;
+                        slots[slotIndex].classList.add('taken-slot');
+                    }
+                    highlightBar(act.from, 'taken');
+                    info.textContent = `把 ${act.val} 从索引 ${act.from} 放入临时位置 k=${act.to}`;
+                    curActionEl.textContent = `取值 to tmp[${act.to}]`;
+                    highlightLine(8);
+                    break;
+                case 'copyBack':
+                    // 把 tmp 的值写回主数组
+                    const p = act.p;
+                    array[p] = act.val;
+                    updateBarValue(p, act.val);
+                    highlightBar(p, 'copy');
+                    info.textContent = `将 tmp 的值 ${act.val} 复制回 A[${p}]`;
+                    curActionEl.textContent = `复制回 A[${p}]`;
+                    highlightLine(12);
+                    break;
+                case 'endMerge':
+                    info.textContent = `完成合并 [${act.left}..${act.right}]`;
+                    curActionEl.textContent = '合并完成';
+                    highlightLine(11);
+                    break;
+            }
+        }
+
+        function clearHighlights() {
+            document.querySelectorAll('.bar').forEach(b => { b.classList.remove('compare', 'taken', 'copy'); });
+        }
+
+        function highlightBar(index, cls) {
+            const b = barsWrap.querySelector(`.bar[data-index='${index}']`);
+            if (b) {
+                b.classList.add(cls);
+            }
+        }
+
+        function getValue(i) { return parseInt(barsWrap.querySelector(`.bar[data-index='${i}'] > span`).textContent); }
+
+        function updateBarValue(i, val) {
+            const b = barsWrap.querySelector(`.bar[data-index='${i}']`);
+            if (!b) return;
+            const max = Math.max(...array, 1);
+            b.style.height = Math.max(12, (val / max) * 220) + 'px';
+            b.querySelector('span').textContent = val;
+        }
+
+        function playPause() {
+            if (playing) { pause(); }
+            else { play(); }
+        }
+        function play() {
+            playing = true; document.getElementById('playBtn').textContent = '暂停';
+            setStatus('播放中');
+            if (actionIdx >= actions.length) { actionIdx = 0; }
+            timer = setInterval(() => {
+                if (actionIdx >= actions.length) { pause(); setStatus('播放完毕'); return; }
+                const act = actions[actionIdx++];
+                doAction(act);
+            }, 500 / speed);
+        }
+        function pause() {
+            playing = false; document.getElementById('playBtn').textContent = '播放';
+            setStatus('已暂停');
+            if (timer) clearInterval(timer);
+        }
+
+        function step() {
+            if (actionIdx >= actions.length) { setStatus('已到末尾'); return; }
+            const act = actions[actionIdx++];
+            doAction(act);
+        }
+
+        // 初始化 UI 按钮
+        document.getElementById('playBtn').addEventListener('click', () => { playPause(); });
+        document.getElementById('stepBtn').addEventListener('click', () => { pause(); step(); });
+        document.getElementById('resetBtn').addEventListener('click', () => { pause(); init(); });
+        document.getElementById('randomBtn').addEventListener('click', () => { array = randomArray(12, 5, 100); init(); });
+        document.getElementById('shuffleBtn').addEventListener('click', () => { array = randomArray(7, 1, 60); init(); });
+        document.getElementById('speed').addEventListener('input', (e) => { speed = Number(e.target.value); setStatus('速度 x' + speed); if (playing) { pause(); play(); } });
+        document.getElementById('setBtn').addEventListener('click', () => { const val = document.getElementById('arrInput').value.trim(); if (!val) return; const a = parseInput(val); if (a.length) { array = a; init(); } });
+
+        function parseInput(s) {
+            const parts = s.split(/[ ,;]+/).filter(x => x !== "");
+            return parts.map(x => Number(x)).filter(x => !Number.isNaN(x));
+        }
+
+        function randomArray(n, min = 1, max = 50) { const a = []; for (let i = 0; i < n; i++) a.push(Math.floor(Math.random() * (max - min + 1)) + min); return a; }
+
+        function init() {
+            actions = genActions(array);
+            actionIdx = 0;
+            renderBars();
+            renderTemp(0);
+            setStatus('已就绪 — 动作数：' + actions.length);
+            info.textContent = '操作信息：——';
+            curLenEl.textContent = '—'; curRangeEl.textContent = '—'; curActionEl.textContent = '—';
+            // restore code text (clear highlights)
+            codeArea.textContent = `1  for len = 1; len < n; len *= 2:\n2      for left = 0; left < n - len; left += 2*len:\n3          mid = left + len - 1\n4          right = min(left + 2*len - 1, n - 1)\n5          // 合并 [left..mid] 和 [mid+1..right]\n6          i = left; j = mid+1; k = left\n7          while i <= mid and j <= right:\n8              if A[i] <= A[j]: tmp[k] = A[i]; i++; k++\n9              else: tmp[k] = A[j]; j++; k++\n10         while i <= mid: tmp[k] = A[i]; i++; k++\n11         while j <= right: tmp[k] = A[j]; j++; k++\n12         for p = left..right: A[p] = tmp[p]`;
+        }
+
+        // entry
+        init(); renderBars();
+
+        // small helpers
+        function getMax() { return Math.max(...array, 1); }
+    </script>
+</body>
+
+</html>

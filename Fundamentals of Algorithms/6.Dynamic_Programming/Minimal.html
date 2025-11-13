@@ -1,0 +1,442 @@
+<!doctype html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>插入加号求最小和 — 动态规划可视化（浅色优化版）</title>
+    <style>
+        :root {
+            --bg: #fbfcfd;
+            --card: #ffffff;
+            --text: #1f2937;
+            --muted: #6b7280;
+            --accent: #60a5fa;
+            --yellow: #fff7cc;
+            /* update */
+            --green: #e6f9e6;
+            /* candidate */
+            --blue: #e8f4ff;
+            /* Num */
+            --red: #ffe6e6;
+            /* impossible */
+            --border: #e6e9ef;
+            --shadow: 0 6px 18px rgba(31, 41, 55, 0.06);
+        }
+
+        * {
+            box-sizing: border-box
+        }
+
+        body {
+            font-family: system-ui, Segoe UI, Roboto, 'PingFang SC', "Helvetica Neue", Arial;
+            margin: 16px;
+            background: var(--bg);
+            color: var(--text)
+        }
+
+        .wrap {
+            max-width: 1200px;
+            margin: 0 auto
+        }
+
+        header {
+            display: flex;
+            align-items: center;
+            gap: 12px
+        }
+
+        h1 {
+            font-size: 20px;
+            margin: 0
+        }
+
+        p.lead {
+            margin: 4px 0 0;
+            color: var(--muted)
+        }
+
+        .card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 12px;
+            box-shadow: var(--shadow)
+        }
+
+        .controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin: 12px 0
+        }
+
+        input[type=text],
+        input[type=number],
+        select {
+            padding: 8px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            min-width: 140px
+        }
+
+        button {
+            padding: 8px 10px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            background: #f4f8ff;
+            color: var(--text);
+            cursor: pointer
+        }
+
+        button.secondary {
+            background: transparent
+        }
+
+        .grid {
+            display: flex;
+            gap: 12px;
+            margin-top: 12px
+        }
+
+        .col {
+            flex: 1;
+            min-width: 300px
+        }
+
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            font-family: monospace
+        }
+
+        th,
+        td {
+            border: 1px solid var(--border);
+            padding: 6px 8px;
+            text-align: center;
+            min-width: 36px
+        }
+
+        th {
+            background: #fafafa;
+            color: var(--muted)
+        }
+
+        .numcell {
+            background: var(--blue)
+        }
+
+        .dp-update {
+            background: var(--yellow)
+        }
+
+        .dp-cand {
+            background: var(--green)
+        }
+
+        .dp-inf {
+            background: var(--red)
+        }
+
+        .controls-right {
+            margin-left: auto;
+            display: flex;
+            gap: 8px;
+            align-items: center
+        }
+
+        #stepInfo {
+            min-height: 90px;
+            margin-top: 8px
+        }
+
+        #log {
+            margin-top: 10px;
+            height: 260px;
+            overflow: auto;
+            background: #fff;
+            padding: 8px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            font-family: monospace
+        }
+
+        .log-line {
+            padding: 6px;
+            border-bottom: 1px dashed #f0f2f5
+        }
+
+        .log-line:hover {
+            background: #fbfbfb
+        }
+
+        footer {
+            margin-top: 12px;
+            color: var(--muted);
+            font-size: 13px
+        }
+
+        @media (max-width:900px) {
+            .grid {
+                flex-direction: column
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <header>
+            <div>
+                <h1>插入 + 号求最小和 — 动态规划可视化</h1>
+                <p class="lead">浅色配色 · 柔和高亮（黄色=更新，绿色=候选，蓝色=Num） · 可逐步回放</p>
+            </div>
+        </header>
+
+        <div class="card controls">
+            <label>数字串: <input id="digits" type="text" value="12345" /></label>
+            <label>m: <input id="mnum" type="number" min="0" value="2" /></label>
+            <button id="build">构建并记录步骤</button>
+            <button id="reset" class="secondary">重置</button>
+            <div class="controls-right">
+                <button id="back">← Prev</button>
+                <button id="step">Next →</button>
+                <button id="play">▶ Play</button>
+                <label>速度(ms): <input id="speed" type="number" value="600" style="width:90px" /></label>
+            </div>
+        </div>
+
+        <div class="grid">
+            <div class="col">
+                <div class="card">
+                    <strong>Num(i,j)</strong>
+                    <div id="numTableWrap" style="margin-top:10px;max-height:420px;overflow:auto"></div>
+                </div>
+
+                <div class="card" style="margin-top:12px">
+                    <strong>dp[k][len]</strong>
+                    <div id="dpTableWrap" style="margin-top:10px;max-height:420px;overflow:auto"></div>
+                </div>
+            </div>
+
+            <div class="col">
+                <div class="card">
+                    <strong>当前步骤</strong>
+                    <div id="stepInfo"></div>
+                    <div style="margin-top:8px"><strong>最终表达式：</strong><span id="bestExpr">—</span></div>
+                </div>
+
+                <div class="card" style="margin-top:12px">
+                    <strong>记录（点击跳转）</strong>
+                    <div id="log"></div>
+                </div>
+            </div>
+        </div>
+
+        <footer>提示：若 n 较大，JS 的 Number 可能超出安全整数范围；本工具以教学与小样本可视化为主。</footer>
+    </div>
+
+    <script>
+        (() => {
+            const digitsEl = document.getElementById('digits');
+            const mEl = document.getElementById('mnum');
+            const buildBtn = document.getElementById('build');
+            const resetBtn = document.getElementById('reset');
+            const playBtn = document.getElementById('play');
+            const stepBtn = document.getElementById('step');
+            const backBtn = document.getElementById('back');
+            const speedEl = document.getElementById('speed');
+            const numWrap = document.getElementById('numTableWrap');
+            const dpWrap = document.getElementById('dpTableWrap');
+            const stepInfo = document.getElementById('stepInfo');
+            const logEl = document.getElementById('log');
+            const bestExprEl = document.getElementById('bestExpr');
+
+            let steps = []; // recorded events
+            let state = { n: 0, m: 0, Num: null, dp: null, pre: null };
+            let idx = -1; let timer = null;
+
+            function resetAll() {
+                steps = []; idx = -1; clearInterval(timer); timer = null; playBtn.textContent = '▶ Play';
+                numWrap.innerHTML = ''; dpWrap.innerHTML = ''; stepInfo.innerHTML = ''; logEl.innerHTML = ''; bestExprEl.textContent = '—';
+                state = { n: 0, m: 0, Num: null, dp: null, pre: null };
+            }
+
+            function build() {
+                resetAll();
+                const s = digitsEl.value.trim();
+                if (!/^[1-9]+$/.test(s)) { alert('请输入只含 1..9 的数字串'); return; }
+                const m = parseInt(mEl.value, 10); if (isNaN(m) || m < 0) { alert('m 必须非负整数'); return; }
+                const n = s.length; state.n = n; state.m = m;
+                if (n < m + 1) { alert('n < m+1，不可能放下这么多加号'); }
+
+                // Num[i][j]
+                const Num = Array.from({ length: n + 1 }, () => Array(n + 1).fill(null));
+                for (let i = 1; i <= n; i++) {
+                    let val = 0;
+                    for (let j = i; j <= n; j++) {
+                        val = val * 10 + (+s[j - 1]);
+                        Num[i][j] = val; // using JS Number (safe for small n)
+                    }
+                }
+
+                // dp and pre
+                const dp = Array.from({ length: m + 1 }, () => Array(n + 1).fill(Infinity));
+                const pre = Array.from({ length: m + 1 }, () => Array(n + 1).fill(-1));
+
+                // base
+                for (let len = 1; len <= n; len++) {
+                    dp[0][len] = Num[1][len];
+                    steps.push({ type: 'init0', k: 0, len, lenVal: dp[0][len] });
+                }
+
+                // DP with recording and record pre when update
+                for (let k = 1; k <= m; k++) {
+                    for (let len = 1; len <= n; len++) {
+                        if (len < k + 1) { dp[k][len] = Infinity; steps.push({ type: 'impossible', k, len }); continue; }
+                        let best = Infinity; let bestI = -1;
+                        steps.push({ type: 'begin', k, len, bestBefore: best });
+                        for (let i = k; i <= len - 1; i++) {
+                            const left = dp[k - 1][i]; const right = Num[i + 1][len];
+                            if (!isFinite(left) || right === null) { steps.push({ type: 'skip', k, len, i, left, right }); continue; }
+                            const cand = left + right;
+                            steps.push({ type: 'try', k, len, i, left, right, cand, bestBefore: best });
+                            if (cand < best) { best = cand; bestI = i; steps.push({ type: 'update', k, len, i, newBest: best }); }
+                        }
+                        dp[k][len] = best; pre[k][len] = bestI; steps.push({ type: 'end', k, len, bestAfter: best });
+                    }
+                }
+
+                state.Num = Num; state.dp = dp; state.pre = pre; steps.push({ type: 'done' });
+
+                renderTables(); renderLog();
+                stepInfo.textContent = `构建完成，共记录 ${steps.length} 步。使用 Next / Play 逐步回放。`;
+                idx = -1;
+
+                // compute final expression if possible
+                if (isFinite(dp[m][n])) {
+                    bestExprEl.textContent = reconstruct(m, n);
+                } else {
+                    bestExprEl.textContent = 'Impossible';
+                }
+            }
+
+            function reconstruct(k, len) {
+                // backtrack using pre
+                const parts = [];
+                while (k > 0) {
+                    const i = state.pre[k][len]; if (i < 0) break;
+                    parts.push({ l: i + 1, r: len });
+                    len = i; k -= 1;
+                }
+                // remaining is [1..len]
+                parts.push({ l: 1, r: len });
+                parts.reverse();
+                return parts.map(p => String(state.Num[p.l][p.r])).join('+');
+            }
+
+            function renderTables(highlight = {}) {
+                const n = state.n; const Num = state.Num;
+                if (!Num) { numWrap.innerHTML = '(请先构建)'; dpWrap.innerHTML = '(请先构建)'; return; }
+                // Num table
+                let html = '<table><tr><th>i\\j</th>';
+                for (let j = 1; j <= n; j++) html += `<th>${j}</th>`; html += '</tr>';
+                for (let i = 1; i <= n; i++) {
+                    html += `<tr><th>${i}</th>`;
+                    for (let j = 1; j <= n; j++) {
+                        if (j < i) html += '<td></td>';
+                        else {
+                            const val = Num[i][j] === null ? '∞' : Num[i][j];
+                            const cls = (highlight.type === 'num' && highlight.i === i && highlight.j === j) ? 'numcell' : '';
+                            html += `<td class="${cls}">${val}</td>`;
+                        }
+                    }
+                    html += '</tr>';
+                }
+                html += '</table>';
+                numWrap.innerHTML = html;
+
+                // dp table
+                const dp = state.dp; const m = state.m;
+                let html2 = '<table><tr><th>k\\len</th>';
+                for (let len = 1; len <= n; len++) html2 += `<th>${len}</th>`; html2 += '</tr>';
+                for (let k = 0; k <= m; k++) {
+                    html2 += `<tr><th>${k}</th>`;
+                    for (let len = 1; len <= n; len++) {
+                        const v = dp[k][len];
+                        let cls = '';
+                        if (!isFinite(v)) cls = 'dp-inf';
+                        if (highlight.type === 'dp' && highlight.k === k && highlight.len === len) cls = 'dp-update';
+                        if (highlight.type === 'cand' && highlight.k === k && highlight.len === len) cls = 'dp-cand';
+                        html2 += `<td class="${cls}">${!isFinite(v) ? '∞' : v}</td>`;
+                    }
+                    html2 += '</tr>';
+                }
+                html2 += '</table>';
+                dpWrap.innerHTML = html2;
+            }
+
+            function renderLog() {
+                logEl.innerHTML = steps.map((s, i) => {
+                    let t = i + 1 + '. ';
+                    switch (s.type) {
+                        case 'init0': t += `dp[0][${s.len}] = ${s.lenVal}`; break;
+                        case 'impossible': t += `dp[${s.k}][${s.len}] = ∞ (len < k+1)`; break;
+                        case 'begin': t += `compute dp[${s.k}][${s.len}] start (best=${s.bestBefore})`; break;
+                        case 'skip': t += `skip i=${s.i} (left=${s.left})`; break;
+                        case 'try': t += `try i=${s.i}: cand = ${s.left} + ${s.right} = ${s.cand} (bestBefore=${s.bestBefore})`; break;
+                        case 'update': t += `update best <- ${s.newBest} (i=${s.i})`; break;
+                        case 'end': t += `dp[${s.k}][${s.len}] = ${s.bestAfter}`; break;
+                        case 'done': t += `DP complete.`; break;
+                    }
+                    return `<div class="log-line" data-step="${i}">${t}</div>`;
+                }).join('');
+                // click handlers
+                Array.from(logEl.querySelectorAll('[data-step]')).forEach(div => {
+                    div.onclick = () => { jumpTo(parseInt(div.getAttribute('data-step'))); };
+                });
+            }
+
+            function showStep(i) {
+                if (i < 0 || i >= steps.length) return;
+                const s = steps[i];
+                let info = `<div style="font-weight:600">Step ${i + 1}/${steps.length}</div>`;
+                switch (s.type) {
+                    case 'init0': info += `<div>设置 dp[0][${s.len}] = ${s.lenVal}</div>`; renderTables({ type: 'dp', k: 0, len: s.len }); break;
+                    case 'impossible': info += `<div>dp[${s.k}][${s.len}] = ∞ （不可能）</div>`; renderTables({ type: 'dp', k: s.k, len: s.len }); break;
+                    case 'begin': info += `<div>计算 dp[${s.k}][${s.len}]，初始 best = ∞</div>`; renderTables({ type: 'dp', k: s.k, len: s.len }); break;
+                    case 'skip': info += `<div>跳过 i=${s.i}：左侧 dp[${s.k - 1}][${s.i}] = ${s.left}</div>`; renderTables({ type: 'dp', k: s.k, len: s.len }); break;
+                    case 'try': info += `<div>尝试 i=${s.i}：候选 cand = ${s.left} + ${s.right} = ${s.cand}<br>先前 best = ${s.bestBefore}</div>`; renderTables({ type: 'cand', k: s.k, len: s.len }); highlightNum(s.i + 1, s.len); break;
+                    case 'update': info += `<div>更新 best：dp[${s.k}][${s.len}] 的当前最优变为 ${s.newBest}（最后一个加号放在 i=${s.i}）</div>`; renderTables({ type: 'dp', k: s.k, len: s.len }); highlightNum(s.i + 1, s.len); break;
+                    case 'end': info += `<div>结束：dp[${s.k}][${s.len}] = ${s.bestAfter}</div>`; renderTables({ type: 'dp', k: s.k, len: s.len }); break;
+                    case 'done': info += `<div>计算完成，最终表达式： ${isFinite(state.dp[state.m][state.n]) ? reconstruct(state.m, state.n) : 'Impossible'}</div>`; renderTables(); break;
+                }
+                stepInfo.innerHTML = info;
+                // scroll log
+                const el = logEl.querySelector(`[data-step='${i}']`); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }
+
+            function highlightNum(i, j) { renderTables({ type: 'num', i, j }); }
+
+            function next() { if (idx + 1 >= steps.length) { clearInterval(timer); timer = null; playBtn.textContent = '▶ Play'; return; } idx++; showStep(idx); }
+            function prev() { if (idx - 1 < 0) return; idx--; showStep(idx); }
+            function jumpTo(i) { idx = i; showStep(idx); }
+
+            buildBtn.onclick = build; resetBtn.onclick = resetAll; stepBtn.onclick = () => { clearInterval(timer); timer = null; playBtn.textContent = '▶ Play'; next(); };
+            backBtn.onclick = () => { clearInterval(timer); timer = null; playBtn.textContent = '▶ Play'; prev(); };
+            playBtn.onclick = () => {
+                if (!timer) { const ms = Math.max(50, parseInt(speedEl.value, 10) || 600); timer = setInterval(() => { if (idx + 1 >= steps.length) { clearInterval(timer); timer = null; playBtn.textContent = '▶ Play'; return; } idx++; showStep(idx); }, ms); playBtn.textContent = '⏸ Pause'; }
+                else { clearInterval(timer); timer = null; playBtn.textContent = '▶ Play'; }
+            };
+
+            // expose reconstruct for button use
+            window.reconstruct = (k, len) => {
+                const parts = []; while (k > 0) { const i = state.pre[k][len]; if (i < 0) break; parts.push({ l: i + 1, r: len }); len = i; k--; } parts.push({ l: 1, r: len }); parts.reverse(); return parts.map(p => String(state.Num[p.l][p.r])).join('+');
+            };
+
+        })();
+    </script>
+</body>
+
+</html>
